@@ -1,0 +1,23 @@
+HangDumpWatchdog
+Copyright (c) 2026 javimentallab
+Licensed under the MIT License. See LICENSE.
+
+This repository contains no third-party source code and no third-party binaries.
+
+Needed to run it, installed separately and not distributed here:
+- PowerShell 7 and .NET: MIT License, Microsoft and contributors.
+
+Used only to draw docs/simulation.png, not needed to run it:
+- Pillow: MIT-CMU License, Jeffrey A. Clark and contributors.
+- DejaVu Sans Mono: DejaVu Fonts License (based on the Bitstream Vera license). Only the
+  picture drawn with the font is in this repository, not the font.
+
+Optional service, only if you configure it:
+- ntfy: the watchdog sends it one plain HTTP request. No ntfy code is used or included.
+
+Undocumented Windows interface:
+- The call and the structure in src/Dump.cs are not in Microsoft's public documentation. The layout
+  was checked against NtDoc (https://ntdoc.m417z.com), which is based on the phnt headers of
+  System Informer (MIT License). No code was copied from either of them.
+- Windows, Task Manager and WinDbg are trademarks of Microsoft. This project is not affiliated with
+  or endorsed by Microsoft.

@@ -1,0 +1,15 @@
+# Local settings: can hold tokens
+config.json
+config.local.json
+token*.txt
+*.token
+
+# Runtime data
+logs/
+dumps/
+*.dmp
+*.log
+
+# Tools
+__pycache__/
+*.pyc

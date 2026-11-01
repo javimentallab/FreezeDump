@@ -1,0 +1,22 @@
+{
+  "dataDir": "",
+  "hangSeconds": 45,
+  "probeIntervalSeconds": 10,
+  "sampleIntervalSeconds": 5,
+  "maxDumpsPerHang": 2,
+  "minSecondsBetweenDumps": 150,
+  "keepDumps": 4,
+  "reserveFiles": 2,
+  "logRetentionDays": 30,
+  "ntfy": {
+    "url": "",
+    "token": ""
+  },
+  "listener": {
+    "enabled": false,
+    "bindAddress": "127.0.0.1",
+    "port": 47999,
+    "allowedClients": [],
+    "token": ""
+  }
+}
