@@ -225,6 +225,10 @@ Cubren la detección, la configuración, la simulación y la escucha, sin depend
 llamada nativa está detrás de una barrera que no pueden abrir. No ejercitan el volcado real, `install.ps1` ni
 `uninstall.ps1` más allá de `-WhatIf`, ni un aviso real.
 
+## Contribuir
+
+Consulta [CONTRIBUTING](CONTRIBUTING.md), en inglés. Para avisar en privado de un problema de seguridad, consulta [SECURITY](SECURITY.md).
+
 ## Licencia
 
 [MIT](LICENSE). Ver [NOTICE](NOTICE) para terceros.

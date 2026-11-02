@@ -222,6 +222,10 @@ They cover detection, configuration, the simulation and the listener, with no de
 a dump: the native call is behind a gate that they can not open. They do not exercise the real dump,
 `install.ps1` or `uninstall.ps1` beyond `-WhatIf`, or a real notification.
 
+## Contributing
+
+See [CONTRIBUTING](CONTRIBUTING.md). To report a security problem privately, see [SECURITY](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE). See [NOTICE](NOTICE) for third parties.
