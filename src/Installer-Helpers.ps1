@@ -102,14 +102,20 @@ function Remove-WatchdogFile {
   }
 }
 
-# Well-known SIDs, because group names change with the Windows language.
+# Well-known SIDs, because group names change with the Windows language. The whole list of rules is
+# replaced, because any rule already on the folder has to go, not only those of these accounts.
 function Set-RestrictedAcl {
   [CmdletBinding(SupportsShouldProcess)]
   param([string]$Path, [switch]$UsersCanRead)
-  $grants = @('*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F')
-  if ($UsersCanRead) { $grants += '*S-1-5-32-545:(OI)(CI)RX' }
+  $rules = @(@('S-1-5-18', 'FullControl'), @('S-1-5-32-544', 'FullControl'))
+  if ($UsersCanRead) { $rules += , @('S-1-5-32-545', 'ReadAndExecute') }
   if ($PSCmdlet.ShouldProcess($Path, 'Allow only SYSTEM and Administrators to change it')) {
-    & icacls.exe $Path /inheritance:r /grant:r @grants | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "icacls failed on $Path with exit code $LASTEXITCODE" }
+    $security = [Security.AccessControl.DirectorySecurity]::new()
+    $security.SetAccessRuleProtection($true, $false)
+    foreach ($rule in $rules) {
+      $sid = [Security.Principal.SecurityIdentifier]::new($rule[0])
+      $security.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, $rule[1], 'ContainerInherit, ObjectInherit', 'None', 'Allow'))
+    }
+    [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]::new($Path), $security)
   }
 }

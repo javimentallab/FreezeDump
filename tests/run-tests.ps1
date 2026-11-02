@@ -711,22 +711,39 @@ Test-Case 'the folder lock leaves only SYSTEM and Administrators, on its content
     Set-RestrictedAcl -Path $dir
     # The owner can always read the permissions, even with no access left to the contents. Not
     # Get-Acl: it needs to list the parent folder, which is exactly what has just been taken away.
-    $security = @(
-      [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($dir)),
-      [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($sub.FullName)),
-      [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]::new($file))
-    )
-    foreach ($item in $security) {
-      $sids = $item.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) |
-        ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique
-      Assert-Equal 'S-1-5-18,S-1-5-32-544' ($sids -join ',')
+    $security = [ordered]@{
+      folder    = [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($dir))
+      subfolder = [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($sub.FullName))
+      file      = [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]::new($file))
     }
-    Assert-True $security[0].AreAccessRulesProtected 'it must not inherit from the parent folder'
+    foreach ($name in $security.Keys) {
+      $rules = $security[$name].GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
+      $sids = $rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique
+      $detail = $rules | ForEach-Object { $_.IdentityReference.Value + $(if ($_.IsInherited) { ' inherited' } else { ' explicit' }) }
+      Assert-Equal 'S-1-5-18,S-1-5-32-544' ($sids -join ',') "on the $name ($($detail -join ', '))"
+    }
+    Assert-True $security.folder.AreAccessRulesProtected 'it must not inherit from the parent folder'
   }
   finally {
     # Hands the folder back so that it can be deleted without admin rights.
     & icacls.exe $dir /grant "*${me}:(OI)(CI)F" | Out-Null
     Assert-Equal 0 $LASTEXITCODE 'could not restore access to the test folder'
+  }
+}
+
+Test-Case 'the folder lock also removes a rule that was already on the folder' {
+  $dir = New-WorkDir
+  $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  & icacls.exe $dir /grant '*S-1-5-32-545:(OI)(CI)R' | Out-Null
+  Assert-Equal 0 $LASTEXITCODE 'could not add the rule'
+  try {
+    Set-RestrictedAcl -Path $dir
+    $sids = [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($dir)).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) |
+      ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique
+    Assert-Equal 'S-1-5-18,S-1-5-32-544' ($sids -join ',')
+  }
+  finally {
+    & icacls.exe $dir /grant "*${me}:(OI)(CI)F" | Out-Null
   }
 }
 
