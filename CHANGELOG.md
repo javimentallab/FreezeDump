@@ -7,7 +7,8 @@ First version prepared for publication. Not released yet.
 ### Added
 - Probe that starts a console process every 10 s. If it has not ended after 45 s, the system counts as hung.
 - Live kernel dump on a hang, without a blue screen: up to 2 per hang, at least 150 s apart.
-- Dump files opened in advance at startup, so a dump does not need to create a file during the hang.
+- Dump files opened in advance at startup, so a dump does not need to create a file during the hang, and written
+  through to disk, so it does not depend on the file cache.
   A reserve that still holds data at startup is kept as `hang-*-rescued.dmp`.
 - Log every 5 s with memory, input idle time, probe latency, top CPU and started and ended processes,
   written through to disk so that it survives a reset.

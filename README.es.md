@@ -11,15 +11,16 @@ Un vigilante para los cuelgues de Windows que no dejan rastro. Si el sistema dej
 analizar después de tener que apagar con el botón.
 
 > **Experimental. Lee antes las [limitaciones conocidas](#limitaciones-conocidas).** Usa una API de Windows sin
-> documentar, solo se ha probado en una versión de Windows y **en el único cuelgue real hasta ahora el volcado no
-> salió**. El arreglo para eso solo se ha probado a petición, nunca durante un cuelgue real.
+> documentar, solo se ha probado en una versión de Windows y **ninguno de los dos cuelgues reales hasta ahora dejó
+> un volcado completo**. El último arreglo aún no se ha probado con un volcado real.
 
 ## Qué hace
 
 - Cada 10 s lanza `cmd.exe /c exit 0` y mide cuánto tarda. Lo normal es unos 50 ms.
 - Si no ha terminado a los 45 s, apunta `HANG` en el log y pide un volcado del núcleo en vivo: 2 como máximo por
   cuelgue, separados al menos 150 s. El volcado va en su propio hilo y no lanza ningún proceso.
-- Deja abiertos los ficheros de volcado desde el arranque, para no tener que crear un fichero durante el cuelgue.
+- Deja abiertos los ficheros de volcado desde el arranque, para no tener que crear un fichero durante el cuelgue, y
+  los escribe directos a disco, para que el volcado no dependa de la caché de ficheros de Windows.
 - Cada 5 s apunta el uso de memoria, el tiempo sin entrada de teclado o ratón, la latencia de la sonda, lo que más
   CPU gasta y qué procesos han empezado o terminado. Cada línea se escribe directa a disco y sobrevive a un reinicio.
 - Si quieres, envía un aviso por [ntfy](https://ntfy.sh) y escucha por TCP a un monitor de otra máquina. Las dos
@@ -38,9 +39,9 @@ analizar después de tener que apagar con el botón.
 
 ## Limitaciones conocidas
 
-### El único cuelgue real hasta ahora: el volcado no salió
+### Dos cuelgues reales hasta ahora: aún ningún volcado completo
 
-El 31 de octubre de 2026 el PC donde se creó se colgó de verdad. **La detección funcionó:** la sonda dejó de
+**Primer cuelgue.** El 31 de octubre de 2026 el PC donde se creó se colgó de verdad. **La detección funcionó:** la sonda dejó de
 terminar y el cuelgue se declaró a los 45 s. **El volcado no:** se pidió y nunca terminó. El log siguió
 escribiéndose 78 segundos más, hasta que se reinició el PC con el botón. No quedó ningún volcado, ni siquiera un
 fichero vacío. Con el PC sano, la misma llamada tarda 2 s o menos.
@@ -50,17 +51,30 @@ los ficheros se abren por adelantado. **Esa explicación no está demostrada.** 
 desaparecer en un reinicio brusco, y puede que lo que se atascara fuera la propia llamada al núcleo. En ese caso,
 este arreglo no sirve.
 
+**Segundo cuelgue.** El 2 de noviembre de 2026 se volvió a colgar, con esos ficheros ya abiertos. La detección volvió
+a funcionar y esta vez la llamada al núcleo terminó en menos de 13 s, así que esa primera explicación encaja. Después,
+cerrar el fichero se atascó: no había terminado 85 s más tarde, cuando se acaba el log, y el PC terminó reiniciándose
+con el botón. El fichero rescatado ocupaba 2,7 GB,
+pero solo el primer 1,1 GB tenía datos y el resto eran ceros. Los comandos habituales de WinDbg (`!locks`, `!process`,
+`!stacks`) no encontraron nada, porque las tablas de páginas y las listas de procesos estaban en la parte perdida. Lo
+que se pudo rescatar a mano mostró hilos esperando candados de NTFS, entre ellos dos de los que escriben a disco los
+ficheros en caché. Eso encaja con que el volcado se quedara en la caché de ficheros, así que ahora los ficheros de
+volcado se escriben directos a disco. **Esa explicación tampoco está demostrada, y la escritura directa no se ha
+probado con un volcado real.** Podría hacer que el volcado tarde más, y sigue necesitando que el disco acepte
+escrituras. El log se escribe del mismo modo y siguió funcionando durante los dos cuelgues.
+
 | Cuándo | Disparo | Código | Resultado |
 |---|---|---|---|
 | 31 oct 2026 | A mano, PC sano | Prototipo privado | Bien: 2,5 GB en 2,0 s. WinDbg lo abrió |
 | 31 oct 2026 | **Cuelgue real** | Prototipo privado | **Cuelgue detectado a los 45 s. El volcado nunca terminó, sin fichero** |
 | 31 oct 2026 | Por TCP, PC sano, con el arreglo | Prototipo privado | Bien: 2273 MB en 1,4 s, cabecera válida, código `0x161` |
-| Aún no | Cuelgue real, con el arreglo | | **Sin probar**: no ha habido ningún cuelgue real desde entonces |
 | 1 nov 2026 | Pruebas automáticas y simulación | Esta versión, 0.1.0 | Pasan |
 | 2 nov 2026 | `-TestDump`, PC sano | Esta versión, 0.1.0 | Bien: 2495 MB en 2,1 s, cabecera válida, código `0x161`. cdb (WinDbg) lo abrió |
+| 2 nov 2026 | **Cuelgue real**, ficheros abiertos por adelantado | Prototipo privado | **Cuelgue detectado a los 45 s. La llamada terminó, cerrar el fichero se atascó. Solo 1,1 GB de 2,7 GB llegó a disco** |
+| Aún no | `-TestDump` y cuelgue real, con escritura directa a disco | | **Sin probar** |
 
 La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma. Este código solo ha
-pedido volcados con el PC sano, y el cuelgue real de arriba fue con el prototipo. Ejecuta
+pedido volcados con el PC sano, y los cuelgues reales de arriba fueron con el prototipo. Ejecuta
 [`-TestDump`](#instalar) para comprobarlo en tu PC.
 
 ### API sin documentar

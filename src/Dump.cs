@@ -220,9 +220,11 @@ namespace FreezeDump
 
         string ReservePath(int i) { return Path.Combine(cfg.DumpDir, "reserve-" + (i + 1) + ".dmp"); }
 
-        static FileStream OpenDumpFile(string path)
+        // Written through to disk: in a real hang the threads that write cached files to disk were
+        // stuck on NTFS locks, and only part of a cached dump had reached the disk at the reset.
+        public static FileStream OpenDumpFile(string path)
         {
-            return new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
+            return new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 4096, FileOptions.WriteThrough);
         }
 
         void Work(string why)

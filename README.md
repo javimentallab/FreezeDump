@@ -11,15 +11,16 @@ processes, it asks for a **live kernel memory dump on its own**, with no blue sc
 is something to analyze after you have had to press the power button.
 
 > **Experimental. Read [Known limitations](#known-limitations) first.** It relies on an undocumented Windows
-> API, it has been tested on one Windows version only, and **in the only real hang so far the dump did not
-> come out**. The fix for that has only been tested on request, never during a real hang.
+> API, it has been tested on one Windows version only, and **neither of the two real hangs so far left a
+> complete dump**. The latest fix has not been tried with a real dump yet.
 
 ## What it does
 
 - Every 10 s it starts `cmd.exe /c exit 0` and times it. Normally that takes about 50 ms.
 - If it has not ended after 45 s, it logs `HANG` and requests a live kernel dump: at most 2 per hang, at
   least 150 s apart. The dump runs on its own thread and starts no process.
-- It keeps the dump files open from startup, so a dump does not need to create a file during the hang.
+- It keeps the dump files open from startup, so a dump does not need to create a file during the hang, and
+  writes them through to disk, so a dump does not depend on the Windows file cache.
 - Every 5 s it logs memory use, input idle time, probe latency, top CPU and which processes started or
   ended. Each line is written through to disk, so the log survives a reset.
 - Optionally, it sends an [ntfy](https://ntfy.sh) notification and listens on TCP for a monitor on another
@@ -38,9 +39,9 @@ is something to analyze after you have had to press the power button.
 
 ## Known limitations
 
-### The only real hang so far: the dump did not come out
+### Two real hangs so far: no complete dump yet
 
-On 31 October 2026 the PC it was built on hung for real. **Detection worked:** the probe stopped ending and
+**First hang.** On 31 October 2026 the PC it was built on hung for real. **Detection worked:** the probe stopped ending and
 the hang was declared at 45 s. **The dump did not:** it was requested and never finished. The log kept being
 written for 78 more seconds, until the PC was reset with the power button. No dump was left, not even an
 empty file. On a healthy PC the same call takes 2 s or less.
@@ -49,17 +50,29 @@ The likeliest explanation is that creating the dump file blocked just as creatin
 are now opened in advance. **That explanation is not proven.** A newly created file can also vanish in a hard
 reset, and the kernel call itself may be what blocked. In that case this fix does not help.
 
+**Second hang.** On 2 November 2026 it hung again, with those files already open. Detection worked again and
+this time the kernel call returned within 13 s, so that first explanation fits. Then closing the file blocked:
+it had not finished 85 s later, when the log stops, and the PC ended up being reset with the power button. The
+rescued file was 2.7 GB, but only the first 1.1 GB held data and
+the rest was zeros. WinDbg's usual commands (`!locks`, `!process`, `!stacks`) found nothing, because the page
+tables and process lists were in the missing part. What could be recovered by hand showed threads waiting on
+NTFS locks, among them two of the threads that write cached files to disk. That fits the dump having stayed in
+the file cache, so the dump files are now written through to disk. **That explanation is not proven either, and
+write-through has not been tried with a real dump.** It could make a dump take longer, and it still needs the
+disk to accept writes. The log is written the same way and kept going during both hangs.
+
 | When | Trigger | Code | Result |
 |---|---|---|---|
 | 31 Oct 2026 | By hand, healthy PC | Private prototype | OK: 2.5 GB in 2.0 s. WinDbg opened it |
 | 31 Oct 2026 | **Real hang** | Private prototype | **Hang detected at 45 s. The dump never finished, no file** |
 | 31 Oct 2026 | Over TCP, healthy PC, with the fix | Private prototype | OK: 2273 MB in 1.4 s, valid header, code `0x161` |
-| Not yet | Real hang, with the fix | | **Never tested**: no real hang since then |
 | 1 Nov 2026 | Automated tests and simulation | This version, 0.1.0 | Pass |
 | 2 Nov 2026 | `-TestDump`, healthy PC | This version, 0.1.0 | OK: 2495 MB in 2.1 s, valid header, code `0x161`. cdb (WinDbg) opened it |
+| 2 Nov 2026 | **Real hang**, files opened in advance | Private prototype | **Hang detected at 45 s. The call returned, closing the file blocked. Only 1.1 GB of 2.7 GB reached the disk** |
+| Not yet | `-TestDump` and real hang, written through to disk | | **Never tested** |
 
 Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same. This code has only
-requested a dump on a healthy PC, and the real hang above happened with the prototype. Run
+requested a dump on a healthy PC, and the real hangs above happened with the prototype. Run
 [`-TestDump`](#install) to check it on your own PC.
 
 ### Undocumented API

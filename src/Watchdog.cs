@@ -168,7 +168,7 @@ namespace FreezeDump
             var watch = System.Diagnostics.Stopwatch.StartNew();
             int status;
             long length;
-            using (var fs = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+            using (var fs = DumpManager.OpenDumpFile(path))
             {
                 status = new LiveKernelDump().Write(fs);
                 length = fs.Length;

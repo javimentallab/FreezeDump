@@ -471,6 +471,44 @@ Test-Case 'a leftover reserve with data is rescued at startup, not overwritten' 
   Assert-Equal 'leftover' ([IO.File]::ReadAllText((Join-Path $dir 'dumps\hang-20260203-040506-rescued.dmp')))
 }
 
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+public static class FileModeProbe
+{
+    [StructLayout(LayoutKind.Sequential)]
+    struct IoStatusBlock { public IntPtr Status; public IntPtr Information; }
+
+    [DllImport("ntdll.dll")]
+    static extern int NtQueryInformationFile(SafeFileHandle file, out IoStatusBlock status, out uint mode, int length, int infoClass);
+
+    // Class 16 is FileModeInformation, and 0x2 in it is FILE_WRITE_THROUGH.
+    public static bool IsWriteThrough(SafeFileHandle file)
+    {
+        IoStatusBlock status;
+        uint mode;
+        int result = NtQueryInformationFile(file, out status, out mode, 4, 16);
+        if (result != 0) throw new InvalidOperationException("NtQueryInformationFile 0x" + result.ToString("X8"));
+        return (mode & 2) != 0;
+    }
+}
+'@
+
+Test-Case 'dump files are written through to disk' {
+  $dir = New-WorkDir
+  $dump = [FreezeDump.DumpManager]::OpenDumpFile((Join-Path $dir 'dump.dmp'))
+  $plain = [IO.FileStream]::new((Join-Path $dir 'plain.dmp'), [IO.FileMode]::Create)
+  try {
+    Assert-True ([FileModeProbe]::IsWriteThrough($dump.SafeFileHandle)) 'the dump file should be write-through'
+    Assert-False ([FileModeProbe]::IsWriteThrough($plain.SafeFileHandle)) 'the probe should tell a plain file apart'
+  } finally {
+    $dump.Dispose()
+    $plain.Dispose()
+  }
+}
+
 Test-Case 'old logs are purged after the retention period, recent ones stay' {
   $dir = New-WorkDir
   New-Item -ItemType Directory -Path (Join-Path $dir 'logs') | Out-Null
