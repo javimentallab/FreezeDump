@@ -12,7 +12,7 @@ analizar después de tener que apagar con el botón.
 
 > **Experimental. Lee antes las [limitaciones conocidas](#limitaciones-conocidas).** Usa una API de Windows sin
 > documentar, solo se ha probado en una versión de Windows y **ninguno de los dos cuelgues reales hasta ahora dejó
-> un volcado completo**. El último arreglo aún no se ha probado con un volcado real.
+> un volcado completo**. El último arreglo solo se ha probado con el PC sano, nunca durante un cuelgue real.
 
 ## Qué hace
 
@@ -59,9 +59,8 @@ pero solo el primer 1,1 GB tenía datos y el resto eran ceros. Los comandos habi
 `!stacks`) no encontraron nada, porque las tablas de páginas y las listas de procesos estaban en la parte perdida. Lo
 que se pudo rescatar a mano mostró hilos esperando candados de NTFS, entre ellos dos de los que escriben a disco los
 ficheros en caché. Eso encaja con que el volcado se quedara en la caché de ficheros, así que ahora los ficheros de
-volcado se escriben directos a disco. **Esa explicación tampoco está demostrada, y la escritura directa no se ha
-probado con un volcado real.** Podría hacer que el volcado tarde más, y sigue necesitando que el disco acepte
-escrituras. El log se escribe del mismo modo y siguió funcionando durante los dos cuelgues.
+volcado se escriben directos a disco. **Esa explicación tampoco está demostrada, y la escritura directa solo se ha
+probado con el PC sano.** Sigue necesitando que el disco acepte escrituras. El log se escribe del mismo modo y siguió funcionando durante los dos cuelgues.
 
 | Cuándo | Disparo | Código | Resultado |
 |---|---|---|---|
@@ -71,6 +70,7 @@ escrituras. El log se escribe del mismo modo y siguió funcionando durante los d
 | 1 nov 2026 | Pruebas automáticas y simulación | Esta versión, 0.1.0 | Pasan |
 | 2 nov 2026 | `-TestDump`, PC sano | Esta versión, 0.1.0 | Bien: 2495 MB en 2,1 s, cabecera válida, código `0x161`. cdb (WinDbg) lo abrió |
 | 2 nov 2026 | **Cuelgue real**, ficheros abiertos por adelantado | Prototipo privado | **Cuelgue detectado a los 45 s. La llamada terminó, cerrar el fichero se atascó. Solo 1,1 GB de 2,7 GB llegó a disco** |
+| 2 nov 2026 | Por TCP, PC sano, con escritura directa a disco | Prototipo privado | Bien: 2820 MB en 3,4 s, cabecera válida, código `0x161`. cdb (WinDbg) listó 327 procesos, sin aviso de fichero cortado |
 | Aún no | `-TestDump` y cuelgue real, con escritura directa a disco | | **Sin probar** |
 
 La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma. Este código solo ha

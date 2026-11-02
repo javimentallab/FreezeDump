@@ -12,7 +12,7 @@ is something to analyze after you have had to press the power button.
 
 > **Experimental. Read [Known limitations](#known-limitations) first.** It relies on an undocumented Windows
 > API, it has been tested on one Windows version only, and **neither of the two real hangs so far left a
-> complete dump**. The latest fix has not been tried with a real dump yet.
+> complete dump**. The latest fix has only been tried on a healthy PC, never during a real hang.
 
 ## What it does
 
@@ -58,8 +58,7 @@ the rest was zeros. WinDbg's usual commands (`!locks`, `!process`, `!stacks`) fo
 tables and process lists were in the missing part. What could be recovered by hand showed threads waiting on
 NTFS locks, among them two of the threads that write cached files to disk. That fits the dump having stayed in
 the file cache, so the dump files are now written through to disk. **That explanation is not proven either, and
-write-through has not been tried with a real dump.** It could make a dump take longer, and it still needs the
-disk to accept writes. The log is written the same way and kept going during both hangs.
+write-through has only been tried on a healthy PC.** It still needs the disk to accept writes. The log is written the same way and kept going during both hangs.
 
 | When | Trigger | Code | Result |
 |---|---|---|---|
@@ -69,6 +68,7 @@ disk to accept writes. The log is written the same way and kept going during bot
 | 1 Nov 2026 | Automated tests and simulation | This version, 0.1.0 | Pass |
 | 2 Nov 2026 | `-TestDump`, healthy PC | This version, 0.1.0 | OK: 2495 MB in 2.1 s, valid header, code `0x161`. cdb (WinDbg) opened it |
 | 2 Nov 2026 | **Real hang**, files opened in advance | Private prototype | **Hang detected at 45 s. The call returned, closing the file blocked. Only 1.1 GB of 2.7 GB reached the disk** |
+| 2 Nov 2026 | Over TCP, healthy PC, written through to disk | Private prototype | OK: 2820 MB in 3.4 s, valid header, code `0x161`. cdb (WinDbg) listed 327 processes, with no truncation warning |
 | Not yet | `-TestDump` and real hang, written through to disk | | **Never tested** |
 
 Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same. This code has only
