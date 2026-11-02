@@ -1,8 +1,8 @@
 # Changelog
 
-## [0.1.0] - 2026-11-01
+## [0.1.0] - 2026-11-02
 
-First version prepared for publication. Not released yet.
+First version.
 
 ### Added
 - Probe that starts a console process every 10 s. If it has not ended after 45 s, the system counts as hung.
@@ -21,4 +21,5 @@ First version prepared for publication. Not released yet.
 - Tests with no dependencies, and test, Trivy, CodeQL and PSScriptAnalyzer workflows.
 
 ### Known limitations
-- The real-hang fix is unproven. See "Known limitations" in the README.
+- Neither real hang so far left a complete dump, and the latest fix has only been tried on a healthy PC. See
+  "Known limitations" in the README.
