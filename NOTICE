@@ -12,6 +12,9 @@ Used only to draw docs/simulation.png, not needed to run it:
 - DejaVu Sans Mono: DejaVu Fonts License (based on the Bitstream Vera license). Only the
   picture drawn with the font is in this repository, not the font.
 
+Used only to check the scripts, not needed to run it:
+- PSScriptAnalyzer: MIT License, Microsoft and contributors. Downloaded when it is used, not included.
+
 Optional service, only if you configure it:
 - ntfy: the watchdog sends it one plain HTTP request. No ntfy code is used or included.
 

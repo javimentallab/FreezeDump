@@ -11,11 +11,13 @@ First version prepared for publication. Not released yet.
   A reserve that still holds data at startup is kept as `hang-*-rescued.dmp`.
 - Log every 5 s with memory, input idle time, probe latency, top CPU and started and ended processes,
   written through to disk so that it survives a reset.
+- `logs` and `dumps` folders readable by administrators only, locked again at every start, also with your own
+  `dataDir`.
 - `DUMP STUCK` log line and notification when a dump takes over 30 s.
 - Optional ntfy notifications and an optional TCP listener for a monitor on another machine. Both off by default.
 - Simulation mode (`-Simulate`) with three scenarios, on a virtual clock and with made-up data.
 - `install.ps1` and `uninstall.ps1`, both with `-WhatIf`.
-- Tests with no dependencies, and Trivy and test workflows.
+- Tests with no dependencies, and test, Trivy, CodeQL and PSScriptAnalyzer workflows.
 
 ### Known limitations
 - The real-hang fix is unproven. See "Known limitations" in the README.

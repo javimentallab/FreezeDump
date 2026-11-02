@@ -14,6 +14,7 @@ For anything big, open an issue first so we can agree on the approach.
 
 ```powershell
 ./tests/run-tests.ps1
+./tests/run-analyzer.ps1   # needs the PSScriptAnalyzer module
 ```
 
 - **Tests:** anything important that you add comes with a test.

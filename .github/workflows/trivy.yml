@@ -20,18 +20,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Run Trivy (vuln + secret + misconfig)
+      # The image goes by digest for the same reason that the Actions go by commit: a tag can move.
+      - name: Run Trivy, fail on HIGH or CRITICAL
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/src" -w /src \
-            ghcr.io/aquasecurity/trivy:0.65.0 fs \
+            ghcr.io/aquasecurity/trivy:0.65.0@sha256:a22415a38938a56c379387a8163fcb0ce38b10ace73e593475d3658d578b2436 fs \
+            --scanners vuln,secret,misconfig \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 --no-progress .
+
+      - name: SARIF report for GitHub Security
+        if: always()
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" -w /src \
+            ghcr.io/aquasecurity/trivy:0.65.0@sha256:a22415a38938a56c379387a8163fcb0ce38b10ace73e593475d3658d578b2436 fs \
             --scanners vuln,secret,misconfig \
             --severity CRITICAL,HIGH,MEDIUM \
             --format sarif --output trivy-results.sarif \
-            --exit-code 0 --no-progress .
+            --no-progress .
 
       - name: Upload results to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: trivy-results.sarif

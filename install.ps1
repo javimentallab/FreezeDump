@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 <#
 .SYNOPSIS
   Installs the watchdog as a scheduled task that starts elevated when the user logs on.
@@ -51,7 +51,7 @@ catch {
   while ($inner.InnerException) { $inner = $inner.InnerException }
   throw "Config problem in ${configToUse}: $($inner.Message)"
 }
-Write-Host "Config OK ($configToUse): $($config.Summary())"
+Write-Output "Config OK ($configToUse): $($config.Summary())"
 
 $scriptPath = Join-Path $InstallDir 'src\watchdog.ps1'
 Stop-InstalledWatchdog -ScriptPath $scriptPath
@@ -70,12 +70,16 @@ if ($PSCmdlet.ShouldProcess($DataDir, 'Create the data folder')) {
   New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 }
 Set-RestrictedAcl -Path $DataDir
-# The dumps go wherever the config says, and they hold kernel memory wherever that is.
+# The dumps go wherever the config says, and they hold kernel memory wherever that is. Only the two
+# folders of this program are locked: the one in the config can be any folder, with other things in it.
+# The watchdog locks them again every time it starts, in case the config changes after this.
 if ($config.DataDir -ne $DataDir) {
-  if ($PSCmdlet.ShouldProcess($config.DataDir, 'Create the data folder set in the config')) {
-    New-Item -ItemType Directory -Force -Path $config.DataDir | Out-Null
+  foreach ($folder in $config.LogDir, $config.DumpDir) {
+    if ($PSCmdlet.ShouldProcess($folder, 'Create the folder set in the config')) {
+      New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    }
+    Set-RestrictedAcl -Path $folder
   }
-  Set-RestrictedAcl -Path $config.DataDir
 }
 if ((-not $useInstalled) -and $PSCmdlet.ShouldProcess($installedConfig, "Copy the config from $sourceConfig")) {
   Copy-Item -Force -LiteralPath $sourceConfig -Destination $installedConfig
@@ -98,14 +102,19 @@ if ($firewall -and $PSCmdlet.ShouldProcess($script:TaskName, "Allow TCP $($firew
     -RemoteAddress $firewall.RemoteAddress -Program $pwshPath -Action Allow -Profile Any | Out-Null
 }
 
-if ($NoStart -or $WhatIfPreference) {
-  Write-Host 'Not started now. It will start at the next logon.'
+if ($WhatIfPreference) {
+  Write-Output 'Nothing was changed: this was only -WhatIf.'
+  return
+}
+
+if ($NoStart) {
+  Write-Output 'Not started now. It will start at the next logon.'
   return
 }
 
 Start-ScheduledTask -TaskName $script:TaskName
 Start-Sleep -Seconds 8
-Write-Host "Task state: $((Get-ScheduledTask -TaskName $script:TaskName).State)"
+Write-Output "Task state: $((Get-ScheduledTask -TaskName $script:TaskName).State)"
 $todayLog = Join-Path $config.LogDir ((Get-Date -Format 'yyyy-MM-dd') + '.log')
 if (Test-Path -LiteralPath $todayLog) { Get-Content -LiteralPath $todayLog -Tail 4 }
-Write-Host "Logs and dumps: $($config.DataDir)"
+Write-Output "Logs and dumps: $($config.DataDir)"

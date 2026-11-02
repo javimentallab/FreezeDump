@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 <#
 .SYNOPSIS
   Watches whether Windows can still create processes and, if it cannot, asks for a live kernel dump.
@@ -103,7 +103,7 @@ catch {
       New-Item -ItemType Directory -Force -Path (Split-Path $errorLog) | Out-Null
       Add-Content -LiteralPath $errorLog -Value "$(Get-Date -Format 's') $message"
     }
-    catch { }
+    catch { [Console]::Error.WriteLine("could not write the startup error log: $($_.Exception.Message)") }
   }
   [Console]::Error.WriteLine("error: $message")
   exit 2

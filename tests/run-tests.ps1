@@ -1,22 +1,28 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 <#
 .SYNOPSIS
   Tests for the detection, the configuration, the simulation and the listener. No dependencies.
 
 .DESCRIPTION
-  They never request a kernel dump: nothing in here can arm the native call (see LiveDumpGate) and
-  only the simulated dump writer is used. No admin rights needed. The only processes started are a
-  harmless "cmd /c exit 0" for the real probe and the short pwsh runs that check the command line.
+  They never request a kernel dump: nothing in here calls the entry points that arm the native call
+  (see LiveDumpGate) and only the simulated dump writer is used. No admin rights needed. The only
+  processes started are a harmless "cmd /c exit 0" for the real probe and the short pwsh runs that
+  check the command line. install.ps1 and uninstall.ps1 only run with -WhatIf and temporary folders.
   The only socket is on the loopback address, on a port picked by Windows.
 
   Exit code 0 means every test passed.
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'A console test runner: its output is for a person to read.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'New-WorkDir only creates folders inside the temporary folder of this run.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Filter is read inside Test-Case, and the unused parameter of the fake dump request is required by its delegate.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', '', Justification = 'Assert-Equal expected actual reads better without parameter names.')]
 param([string]$Filter = '')
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path $PSScriptRoot -Parent
 . (Join-Path $root 'src\Load-Types.ps1')
 . (Join-Path $root 'src\Installer-Helpers.ps1')
+. (Join-Path $PSScriptRoot 'ConvertTo-Sarif.ps1')
 
 $script:passed = 0
 $script:failures = [System.Collections.Generic.List[string]]::new()
@@ -58,7 +64,7 @@ function Assert-Equal {
   if ($Expected -ne $Actual) { throw "expected [$Expected], got [$Actual] $Message" }
 }
 
-function Assert-Throws {
+function Assert-Throw {
   param([scriptblock]$Body, [string]$Contains)
   $thrown = $null
   try { & $Body } catch { $thrown = $_.Exception }
@@ -97,10 +103,10 @@ Test-Case 'the native dump is not armed when the tests start' {
 }
 
 Test-Case 'the gate refuses while it is not armed' {
-  Assert-Throws { [FreezeDump.LiveDumpGate]::EnsureArmed() } 'not armed'
+  Assert-Throw { [FreezeDump.LiveDumpGate]::EnsureArmed() } 'not armed'
 }
 
-Test-Case 'tests cannot arm the gate: Arm is not public' {
+Test-Case 'only the real entry points can arm the gate: Arm is not public' {
   $arm = [FreezeDump.LiveDumpGate].GetMethod('Arm', [Reflection.BindingFlags]'Public,Static')
   Assert-True ($null -eq $arm)
 }
@@ -232,18 +238,18 @@ Test-Case 'comments and trailing commas are accepted' {
 }
 
 Test-Case 'a typo in a setting name is an error, not silence' {
-  Assert-Throws { & $Parse '{ "hangSecond": 60 }' } "unknown setting 'hangSecond'"
-  Assert-Throws { & $Parse '{ "ntfy": { "ulr": "x" } }' } "unknown setting 'ntfy.ulr'"
-  Assert-Throws { & $Parse '{ "listener": { "tokn": "x" } }' } "unknown setting 'listener.tokn'"
+  Assert-Throw { & $Parse '{ "hangSecond": 60 }' } "unknown setting 'hangSecond'"
+  Assert-Throw { & $Parse '{ "ntfy": { "ulr": "x" } }' } "unknown setting 'ntfy.ulr'"
+  Assert-Throw { & $Parse '{ "listener": { "tokn": "x" } }' } "unknown setting 'listener.tokn'"
 }
 
 Test-Case 'broken JSON and wrong types give a clear error' {
-  Assert-Throws { & $Parse '{ nope' } 'not valid JSON'
-  Assert-Throws { & $Parse '[]' } 'JSON object'
-  Assert-Throws { & $Parse '{ "hangSeconds": "45" }' } 'whole number'
-  Assert-Throws { & $Parse '{ "hangSeconds": 45.5 }' } 'whole number'
-  Assert-Throws { & $Parse '{ "dataDir": 3 }' } 'must be text'
-  Assert-Throws { & $Parse '{ "listener": { "enabled": "yes" } }' } 'true or false'
+  Assert-Throw { & $Parse '{ nope' } 'not valid JSON'
+  Assert-Throw { & $Parse '[]' } 'JSON object'
+  Assert-Throw { & $Parse '{ "hangSeconds": "45" }' } 'whole number'
+  Assert-Throw { & $Parse '{ "hangSeconds": 45.5 }' } 'whole number'
+  Assert-Throw { & $Parse '{ "dataDir": 3 }' } 'must be text'
+  Assert-Throw { & $Parse '{ "listener": { "enabled": "yes" } }' } 'true or false'
 }
 
 Test-Case 'numbers out of range are rejected' {
@@ -251,17 +257,17 @@ Test-Case 'numbers out of range are rejected' {
       @('hangSeconds', 9), @('hangSeconds', 3601), @('probeIntervalSeconds', 0), @('sampleIntervalSeconds', 0),
       @('maxDumpsPerHang', -1), @('maxDumpsPerHang', 21), @('minSecondsBetweenDumps', 29), @('keepDumps', 0),
       @('reserveFiles', -1), @('reserveFiles', 9), @('logRetentionDays', 0))) {
-    Assert-Throws { & $Parse ('{ "' + $case[0] + '": ' + $case[1] + ' }') } $case[0]
+    Assert-Throw { & $Parse ('{ "' + $case[0] + '": ' + $case[1] + ' }') } $case[0]
   }
 }
 
 Test-Case 'the probe must run more often than the hang limit' {
-  Assert-Throws { & $Parse '{ "hangSeconds": 20, "probeIntervalSeconds": 20 }' } 'lower than'
+  Assert-Throw { & $Parse '{ "hangSeconds": 20, "probeIntervalSeconds": 20 }' } 'lower than'
 }
 
 Test-Case 'the data folder must be local and absolute' {
   foreach ($bad in 'relative\\dir', '\\\\server\\share', '\\\\?\\C:\\x', 'C:relative', 'C:\\a\\..\\b', 'C:/x') {
-    Assert-Throws { & $Parse ('{ "dataDir": "' + $bad + '" }') } 'dataDir'
+    Assert-Throw { & $Parse ('{ "dataDir": "' + $bad + '" }') } 'dataDir'
   }
   Assert-Equal 'D:\Watchdog' (& $Parse '{ "dataDir": "D:\\Watchdog" }').DataDir
 }
@@ -269,7 +275,7 @@ Test-Case 'the data folder must be local and absolute' {
 Test-Case 'notification URLs are validated' {
   foreach ($bad in 'not a url', 'ftp://ntfy.example.com/topic', 'file:///C:/x', 'https://ntfy.example.com/', 'https://user:pw@ntfy.example.com/topic',
     'http://ntfy.example.com/topic', 'http://203.0.113.5/topic', 'http://172.32.0.1/topic') {
-    Assert-Throws { & $Parse ('{ "ntfy": { "url": "' + $bad + '" } }') } 'ntfy.url'
+    Assert-Throw { & $Parse ('{ "ntfy": { "url": "' + $bad + '" } }') } 'ntfy.url'
   }
   foreach ($good in 'https://ntfy.example.com/topic', 'http://localhost:8090/topic', 'http://127.0.0.1/topic', 'http://10.0.0.5/topic', 'http://172.16.0.1/topic') {
     Assert-True (& $Parse ('{ "ntfy": { "url": "' + $good + '" } }')).Ntfy.Enabled
@@ -277,17 +283,17 @@ Test-Case 'notification URLs are validated' {
 }
 
 Test-Case 'a notification token needs a URL and has no spaces' {
-  Assert-Throws { & $Parse '{ "ntfy": { "token": "abc" } }' } "'ntfy.url' is empty"
-  Assert-Throws { & $Parse '{ "ntfy": { "url": "https://ntfy.example.com/t", "token": "a b" } }' } 'ntfy.token'
+  Assert-Throw { & $Parse '{ "ntfy": { "token": "abc" } }' } "'ntfy.url' is empty"
+  Assert-Throw { & $Parse '{ "ntfy": { "url": "https://ntfy.example.com/t", "token": "a b" } }' } 'ntfy.token'
 }
 
 Test-Case 'listener settings are validated' {
-  Assert-Throws { & $Parse '{ "listener": { "port": 80 } }' } 'listener.port'
-  Assert-Throws { & $Parse '{ "listener": { "bindAddress": "somehost" } }' } 'bindAddress'
-  Assert-Throws { & $Parse '{ "listener": { "allowedClients": ["nope"] } }' } 'allowedClients'
-  Assert-Throws { & $Parse '{ "listener": { "token": "short" } }' } 'at least 16'
-  Assert-Throws { & $Parse '{ "listener": { "token": "has a space in the middle" } }' } 'listener.token'
-  Assert-Throws { & $Parse '{ "listener": { "enabled": true, "bindAddress": "0.0.0.0" } }' } 'allowedClients'
+  Assert-Throw { & $Parse '{ "listener": { "port": 80 } }' } 'listener.port'
+  Assert-Throw { & $Parse '{ "listener": { "bindAddress": "somehost" } }' } 'bindAddress'
+  Assert-Throw { & $Parse '{ "listener": { "allowedClients": ["nope"] } }' } 'allowedClients'
+  Assert-Throw { & $Parse '{ "listener": { "token": "short" } }' } 'at least 16'
+  Assert-Throw { & $Parse '{ "listener": { "token": "has a space in the middle" } }' } 'listener.token'
+  Assert-Throw { & $Parse '{ "listener": { "enabled": true, "bindAddress": "0.0.0.0" } }' } 'allowedClients'
   Assert-True (& $Parse '{ "listener": { "enabled": true } }').Listener.Enabled
 }
 
@@ -518,11 +524,11 @@ Test-Case 'with no folder given it uses a temporary one, not the current folder'
 }
 
 Test-Case 'a relative simulation folder is refused' {
-  Assert-Throws { [FreezeDump.Simulation]::Run('ok', $Defaults, 'relative\dir', $false) } 'absolute path'
+  Assert-Throw { [FreezeDump.Simulation]::Run('ok', $Defaults, 'relative\dir', $false) } 'absolute path'
 }
 
 Test-Case 'an unknown scenario is refused' {
-  Assert-Throws { [FreezeDump.Simulation]::Run('nope', $Defaults, (New-WorkDir), $false) } 'unknown scenario'
+  Assert-Throw { [FreezeDump.Simulation]::Run('nope', $Defaults, (New-WorkDir), $false) } 'unknown scenario'
 }
 
 Test-Case 'a sampler that stops is reported, a slow but regular one is not' {
@@ -700,6 +706,131 @@ Test-Case 'with UsersCanRead, Users get read access and nothing more' {
   }
 }
 
+Test-Case 'the uninstaller finds a dataDir set in the installed config, and only that' {
+  $loader = Join-Path $root 'src\Load-Types.ps1'
+  $data = New-WorkDir
+  Assert-True ($null -eq (Get-ConfiguredDataDir -DataDir $data -LoadTypesScript $loader)) 'no config'
+  $config = Join-Path $data 'config.json'
+  Set-Content -LiteralPath $config -Value '{}'
+  Assert-True ($null -eq (Get-ConfiguredDataDir -DataDir $data -LoadTypesScript $loader)) 'no dataDir set'
+  Set-Content -LiteralPath $config -Value ('{ "dataDir": "' + $data.Replace('\', '\\') + '" }')
+  Assert-True ($null -eq (Get-ConfiguredDataDir -DataDir $data -LoadTypesScript $loader)) 'the same folder'
+  Set-Content -LiteralPath $config -Value '{ "dataDir": "D:\\Elsewhere" }'
+  Assert-Equal 'D:\Elsewhere' (Get-ConfiguredDataDir -DataDir $data -LoadTypesScript $loader)
+}
+
+Test-Case 'a config that can not be read does not stop the uninstaller' {
+  $data = New-WorkDir
+  Set-Content -LiteralPath (Join-Path $data 'config.json') -Value '{ nope'
+  $found = Get-ConfiguredDataDir -DataDir $data -LoadTypesScript (Join-Path $root 'src\Load-Types.ps1') 3>$null
+  Assert-True ($null -eq $found)
+}
+
+$NewOwnDataDir = {
+  $own = New-WorkDir
+  New-Item -ItemType Directory -Path (Join-Path $own 'dumps'), (Join-Path $own 'logs') | Out-Null
+  $own
+}
+
+Test-Case 'an own dataDir loses only what the program wrote' {
+  $own = & $NewOwnDataDir
+  $written = 'dumps\hang-20260101-010101.dmp', 'dumps\hang-20260101-010101-rescued.dmp', 'dumps\hang-20260101-010101-rescued-2.dmp',
+    'dumps\test-20260101-010101.dmp', 'dumps\reserve-1.dmp', 'logs\2026-01-01.log'
+  $foreign = 'dumps\important.dmp', 'dumps\hang-notes.dmp', 'logs\other.log', 'photo.jpg'
+  foreach ($name in $written + $foreign) { Set-Content -LiteralPath (Join-Path $own $name) -Value 'x' }
+  Remove-WatchdogFile -Folder $own -Confirm:$false
+  foreach ($name in $written) { Assert-False (Test-Path -LiteralPath (Join-Path $own $name)) "$name should be gone" }
+  foreach ($name in $foreign) { Assert-True (Test-Path -LiteralPath (Join-Path $own $name)) "$name should stay" }
+}
+
+Test-Case 'an own dataDir left empty goes as well' {
+  $own = & $NewOwnDataDir
+  Set-Content -LiteralPath (Join-Path $own 'logs\2026-01-01.log') -Value 'x'
+  Remove-WatchdogFile -Folder $own -Confirm:$false
+  Assert-False (Test-Path -LiteralPath $own)
+}
+
+Write-Host 'Data folders'
+
+function Get-AllowedSid {
+  param($Security)
+  return ($Security.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) |
+      ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique) -join ','
+}
+
+# Hands a locked folder back, so that it can be deleted without admin rights.
+function Restore-FolderAccess {
+  param([string[]]$Path)
+  $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  foreach ($folder in $Path) {
+    if (Test-Path -LiteralPath $folder) { & icacls.exe $folder /grant "*${me}:(OI)(CI)F" | Out-Null }
+  }
+}
+
+Test-Case 'an elevated start locks logs and dumps with what they hold, and Administrators stay in' {
+  $data = New-WorkDir
+  $logs = Join-Path $data 'logs'
+  $dumps = Join-Path $data 'dumps'
+  New-Item -ItemType Directory -Path $logs | Out-Null
+  $old = Join-Path $logs 'old.log'
+  Set-Content -LiteralPath $old -Value 'x'
+  try {
+    $line = [FreezeDump.DataFolders]::Prepare($true, [string[]]@($logs, $dumps))
+    Assert-True ($line -like 'data folders restricted*') $line
+    $folders = @(
+      [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($logs)),
+      [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($dumps))
+    )
+    foreach ($security in $folders) {
+      Assert-Equal 'S-1-5-18,S-1-5-32-544' (Get-AllowedSid $security)
+      Assert-True $security.AreAccessRulesProtected 'it must not inherit from the parent folder'
+      $administrators = $security.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) |
+        Where-Object { $_.IdentityReference.Value -eq 'S-1-5-32-544' }
+      Assert-Equal 'FullControl' $administrators.FileSystemRights.ToString()
+      Assert-Equal 'ContainerInherit, ObjectInherit' $administrators.InheritanceFlags.ToString()
+    }
+    Assert-Equal 'S-1-5-18,S-1-5-32-544' (Get-AllowedSid ([IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]::new($old))))
+  }
+  finally { Restore-FolderAccess -Path $logs, $dumps }
+}
+
+Test-Case 'dataDir itself and what else it holds are left alone' {
+  $data = New-WorkDir
+  $logs = Join-Path $data 'logs'
+  $keep = Join-Path $data 'keep.txt'
+  Set-Content -LiteralPath $keep -Value 'mine'
+  try {
+    [void][FreezeDump.DataFolders]::Prepare($true, [string[]]@($logs))
+    Assert-False ([IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($data)).AreAccessRulesProtected)
+    Assert-Equal 'mine' (Get-Content -LiteralPath $keep -Raw).Trim()
+  }
+  finally { Restore-FolderAccess -Path $logs }
+}
+
+Test-Case 'without elevation the rights stay as they are, so the process can still write its log' {
+  $logs = Join-Path (New-WorkDir) 'logs'
+  $line = [FreezeDump.DataFolders]::Prepare($false, [string[]]@($logs))
+  Assert-True ($line -like '*NOT restricted*') $line
+  Assert-False ([IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]::new($logs)).AreAccessRulesProtected)
+  Set-Content -LiteralPath (Join-Path $logs 'today.log') -Value 'x'
+}
+
+Test-Case 'a folder that can not be prepared stops the start, with the reason' {
+  $notAFolder = Join-Path (New-WorkDir) 'file'
+  Set-Content -LiteralPath $notAFolder -Value 'x'
+  Assert-Throw { [FreezeDump.DataFolders]::Prepare($true, [string[]]@($notAFolder)) } 'cannot prepare'
+}
+
+Test-Case 'the process knows whether it is elevated' {
+  Assert-Equal (Test-IsAdministrator) ([FreezeDump.DataFolders]::ProcessIsElevated())
+}
+
+Test-Case 'every real entry point prepares its folders and none creates them on its own' {
+  $code = Get-Content -LiteralPath (Join-Path $root 'src\Watchdog.cs') -Raw
+  Assert-False ($code -match 'Directory\.CreateDirectory')
+  Assert-Equal 3 ([regex]::Matches($code, 'DataFolders\.Prepare\(DataFolders\.ProcessIsElevated\(\)').Count)
+}
+
 Write-Host 'Command line (separate pwsh processes)'
 
 $Watchdog = Join-Path $root 'src\watchdog.ps1'
@@ -707,6 +838,95 @@ $Run = {
   param([string[]]$Arguments)
   $output = & (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -File $Watchdog @Arguments 2>&1
   [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($output -join "`n") }
+}
+
+# Always with -WhatIf: these tests must not be able to install or uninstall anything.
+$RunWhatIf = {
+  param([string]$Script, [string[]]$Arguments)
+  $output = & (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -File (Join-Path $root $Script) -WhatIf @Arguments 2>&1
+  [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($output -join "`n") }
+}
+
+Test-Case 'install.ps1 -WhatIf changes nothing and says so' {
+  $work = New-WorkDir
+  $program = Join-Path $work 'program'
+  $data = Join-Path $work 'data'
+  $r = & $RunWhatIf 'install.ps1' @('-InstallDir', $program, '-DataDir', $data)
+  Assert-Equal 0 $r.Code $r.Text
+  Assert-True ($r.Text -like '*Nothing was changed*') $r.Text
+  Assert-False ($r.Text -like '*next logon*') 'nothing was registered, so nothing starts at the next logon'
+  Assert-False (Test-Path -LiteralPath $program)
+  Assert-False (Test-Path -LiteralPath $data)
+}
+
+Test-Case 'install.ps1 locks only the logs and dumps of an own dataDir' {
+  $work = New-WorkDir
+  $data = Join-Path $work 'data'
+  $own = Join-Path $work 'own'
+  New-Item -ItemType Directory -Path $data | Out-Null
+  Set-Content -LiteralPath (Join-Path $data 'config.json') -Value ('{ "dataDir": "' + $own.Replace('\', '\\') + '" }')
+  $r = & $RunWhatIf 'install.ps1' @('-InstallDir', (Join-Path $work 'program'), '-DataDir', $data)
+  Assert-Equal 0 $r.Code $r.Text
+  Assert-True $r.Text.Contains("`"$own\logs`"") $r.Text
+  Assert-True $r.Text.Contains("`"$own\dumps`"") $r.Text
+  Assert-False $r.Text.Contains("`"$own`"") 'the folder itself can hold other things'
+  Assert-False (Test-Path -LiteralPath $own)
+}
+
+Test-Case 'uninstall.ps1 -WhatIf -RemoveData changes nothing and lists the logs and dumps of an own dataDir' {
+  $work = New-WorkDir
+  $data = Join-Path $work 'data'
+  $own = & $NewOwnDataDir
+  New-Item -ItemType Directory -Path $data | Out-Null
+  Set-Content -LiteralPath (Join-Path $data 'config.json') -Value ('{ "dataDir": "' + $own.Replace('\', '\\') + '" }')
+  $dump = Join-Path $own 'dumps\hang-20260101-010101.dmp'
+  $foreign = Join-Path $own 'dumps\important.dmp'
+  Set-Content -LiteralPath $dump -Value 'x'
+  Set-Content -LiteralPath $foreign -Value 'x'
+  $r = & $RunWhatIf 'uninstall.ps1' @('-RemoveData', '-InstallDir', (Join-Path $work 'program'), '-DataDir', $data)
+  Assert-Equal 0 $r.Code $r.Text
+  Assert-True $r.Text.Contains($dump) $r.Text
+  Assert-False $r.Text.Contains($foreign) $r.Text
+  Assert-True (Test-Path -LiteralPath $dump)
+  Assert-True (Test-Path -LiteralPath (Join-Path $data 'config.json'))
+}
+
+Test-Case 'without -RemoveData the uninstaller says where the logs and dumps of an own dataDir stay' {
+  $work = New-WorkDir
+  $data = Join-Path $work 'data'
+  New-Item -ItemType Directory -Path $data | Out-Null
+  Set-Content -LiteralPath (Join-Path $data 'config.json') -Value '{ "dataDir": "D:\\Elsewhere" }'
+  $r = & $RunWhatIf 'uninstall.ps1' @('-InstallDir', (Join-Path $work 'program'), '-DataDir', $data)
+  Assert-Equal 0 $r.Code $r.Text
+  Assert-True ($r.Text -like '*also in D:\Elsewhere*') $r.Text
+}
+
+Test-Case 'install.ps1 and the installed copy of the watchdog work in one console' {
+  $work = New-WorkDir
+  $copy = Join-Path $work 'installed'
+  New-Item -ItemType Directory -Path $copy | Out-Null
+  Copy-Item -LiteralPath (Join-Path $root 'src') -Destination $copy -Recurse
+  $install = Join-Path $root 'install.ps1'
+  $installedWatchdog = Join-Path $copy 'src\watchdog.ps1'
+  $command = "& '$install' -WhatIf -InstallDir '$work\program' -DataDir '$work\data' | Out-Null; & '$installedWatchdog' -ShowVersion"
+  $output = (& (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -Command $command 2>&1) -join "`n"
+  Assert-True ($output -like "*FreezeDump $([FreezeDump.Program]::Version)*") $output
+}
+
+Test-Case 'a downloaded copy runs only after Unblock-File, as the README says' {
+  if ((Get-ExecutionPolicy -Scope MachinePolicy) -ne 'Undefined') { return }
+  $copy = New-WorkDir
+  Copy-Item -LiteralPath (Join-Path $root 'src') -Destination $copy -Recurse
+  foreach ($file in Get-ChildItem -LiteralPath $copy -Recurse -File) {
+    Set-Content -LiteralPath $file.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+  }
+  $script = Join-Path $copy 'src\watchdog.ps1'
+  $version = "*FreezeDump $([FreezeDump.Program]::Version)*"
+  $blocked = (& (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File $script -ShowVersion 2>&1) -join "`n"
+  Assert-False ($blocked -like $version) 'a file from the internet should have been refused'
+  Get-ChildItem -LiteralPath $copy -Recurse -File | Unblock-File
+  $unblocked = (& (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File $script -ShowVersion 2>&1) -join "`n"
+  Assert-True ($unblocked -like $version) $unblocked
 }
 
 Test-Case '-Simulate works end to end and says that nothing was real' {
@@ -783,6 +1003,13 @@ Test-Case 'scripts avoid the type aliases that PowerShell 5.1 does not know' {
   }
 }
 
+Test-Case 'no command is glued to its first argument' {
+  foreach ($file in $repoFiles | Where-Object Extension -eq '.ps1') {
+    $lines = Get-Matching (Get-Content -LiteralPath $file.FullName) '\bWrite-(Output|Host|Warning)["'']'
+    Assert-Equal 0 $lines.Count "$($file.Name): $($lines -join ' / ')"
+  }
+}
+
 Test-Case 'scripts parse without errors' {
   foreach ($file in $repoFiles | Where-Object Extension -eq '.ps1') {
     $errors = $null
@@ -815,6 +1042,109 @@ Test-Case 'the workflows limit permissions and avoid pull_request_target' {
     $text = Get-Content -LiteralPath $workflow.FullName -Raw
     Assert-True ($text -match '(?m)^permissions:') "$($workflow.Name) has no permissions block"
     Assert-False ($text -match 'pull_request_target') $workflow.Name
+  }
+}
+
+Test-Case 'every Action is pinned to a full commit, with its version in a comment' {
+  foreach ($workflow in Get-ChildItem -LiteralPath (Join-Path $root '.github\workflows') -Filter '*.yml') {
+    foreach ($line in Get-Content -LiteralPath $workflow.FullName | Where-Object { $_ -match '^\s*(- )?uses:' }) {
+      Assert-True ($line -match '@[0-9a-f]{40} # v\d') "$($workflow.Name): $line"
+    }
+  }
+}
+
+Test-Case 'Trivy fails on HIGH or CRITICAL and its image goes by digest' {
+  $text = Get-Content -LiteralPath (Join-Path $root '.github\workflows\trivy.yml') -Raw
+  Assert-True ($text -match '--severity CRITICAL,HIGH\s+\\\s+--exit-code 1')
+  Assert-False ($text -match '--exit-code 0')
+  $images = [regex]::Matches($text, 'ghcr\.io/aquasecurity/trivy\S*')
+  Assert-True ($images.Count -gt 0)
+  foreach ($image in $images) { Assert-True ($image.Value -match '@sha256:[0-9a-f]{64}$') $image.Value }
+}
+
+Test-Case 'the PowerShell scripts are analyzed in CI and the results reach GitHub Security' {
+  $text = Get-Content -LiteralPath (Join-Path $root '.github\workflows\psscriptanalyzer.yml') -Raw
+  Assert-True ($text -match 'tests/run-analyzer\.ps1 .*-SarifPath analyzer-results\.sarif')
+  Assert-True ($text -match 'upload-sarif@')
+  Assert-True ($text -match 'sarif_file: analyzer-results\.sarif')
+  Assert-True ($text -match 'Save-Module -Name PSScriptAnalyzer -RequiredVersion \d') 'the version must be fixed'
+}
+
+Test-Case 'analyzer results become SARIF with relative paths and the right levels' {
+  $results = @(
+    [pscustomobject]@{ ScriptPath = 'C:\Some\Repo\src\a.ps1'; RuleName = 'RuleA'; Severity = 'Warning'; Message = 'first'; Line = 3; Column = 5 },
+    [pscustomobject]@{ ScriptPath = 'C:\Some\Repo\b.ps1'; RuleName = 'RuleB'; Severity = 'Information'; Message = 'second'; Line = 0; Column = 0 },
+    [pscustomobject]@{ ScriptPath = 'D:\Elsewhere\c.ps1'; RuleName = 'RuleA'; Severity = 'ParseError'; Message = 'third'; Line = 1; Column = 1 }
+  )
+  $json = ConvertTo-AnalyzerSarif -Results $results -Root 'C:\Some\Repo' -ToolVersion '1.2.3'
+  $sarif = $json | ConvertFrom-Json
+  Assert-Equal '2.1.0' $sarif.version
+  $run = $sarif.runs[0]
+  Assert-Equal '1.2.3' $run.tool.driver.version
+  Assert-Equal 'RuleA,RuleB' (@($run.tool.driver.rules | ForEach-Object id) -join ',')
+  Assert-Equal 'warning,note,error' (@($run.results | ForEach-Object level) -join ',')
+  Assert-Equal 'src/a.ps1' $run.results[0].locations[0].physicalLocation.artifactLocation.uri
+  Assert-Equal 3 $run.results[0].locations[0].physicalLocation.region.startLine
+  Assert-Equal 1 $run.results[1].locations[0].physicalLocation.region.startLine 'SARIF lines start at 1'
+  Assert-Equal 'c.ps1' $run.results[2].locations[0].physicalLocation.artifactLocation.uri
+  Assert-False ($json -like '*Elsewhere*') 'no local path in the report'
+}
+
+Test-Case 'no analyzer results is still valid SARIF' {
+  $sarif = ConvertTo-AnalyzerSarif -Results @() -Root 'C:\Some\Repo' -ToolVersion '1.2.3' | ConvertFrom-Json
+  Assert-Equal 0 @($sarif.runs[0].results).Count
+}
+
+Test-Case 'scripts started by hand require PowerShell 7.4, and the READMEs say so' {
+  foreach ($script in 'install.ps1', 'uninstall.ps1', 'src\watchdog.ps1', 'tests\run-tests.ps1', 'tests\run-analyzer.ps1') {
+    Assert-Equal '#Requires -Version 7.4' (Get-Content -LiteralPath (Join-Path $root $script) -TotalCount 1) $script
+  }
+  $readmes = @{
+    'README.md'    = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw
+    'README.es.md' = Get-Content -LiteralPath (Join-Path $root 'README.es.md') -Raw
+  }
+  foreach ($name in $readmes.Keys) { Assert-True ($readmes[$name] -match 'PowerShell 7\.4') $name }
+}
+
+$ReadmeEn = Get-Content -LiteralPath (Join-Path $root 'README.md')
+$ReadmeEs = Get-Content -LiteralPath (Join-Path $root 'README.es.md')
+
+Test-Case 'both READMEs have the same structure and the same commands' {
+  foreach ($pattern in '^#', '^\|', '^```', '^\| *-', '^> ') {
+    Assert-Equal (Get-Matching $ReadmeEn $pattern).Count (Get-Matching $ReadmeEs $pattern).Count "lines matching $pattern"
+  }
+  $commands = {
+    param($Lines)
+    (Get-Matching $Lines '^(\.\\|pwsh |git |cd |printf |Get-ChildItem |Copy-Item )') | ForEach-Object { ($_ -replace '\s+#.*$', '').Trim() }
+  }
+  Assert-Equal ((& $commands $ReadmeEn) -join "`n") ((& $commands $ReadmeEs) -join "`n")
+}
+
+Test-Case 'both READMEs say how to get the code and what to do with a ZIP' {
+  foreach ($readme in @($ReadmeEn, $ReadmeEs)) {
+    Assert-Equal 1 (Get-Matching $readme '^git clone https://github\.com/javimentallab/FreezeDump$').Count
+    Assert-Equal 1 (Get-Matching $readme '^Get-ChildItem -Recurse -File \| Unblock-File$').Count
+  }
+}
+
+Test-Case 'both READMEs run the installed watchdog in a new process' {
+  foreach ($readme in @($ReadmeEn, $ReadmeEs)) {
+    Assert-Equal 1 (Get-Matching $readme '^pwsh -File "\$env:ProgramFiles\\FreezeDump\\src\\watchdog\.ps1" -TestDump$').Count
+    Assert-Equal 0 (Get-Matching $readme '^& ').Count
+  }
+}
+
+Test-Case 'both READMEs explain -ReplaceConfig and what -RemoveData does in an own dataDir' {
+  foreach ($readme in @($ReadmeEn, $ReadmeEs)) {
+    Assert-True ((Get-Matching $readme '-ReplaceConfig').Count -ge 1)
+    Assert-True ((Get-Matching $readme '`dataDir`, `-RemoveData`').Count -ge 1)
+  }
+}
+
+Test-Case 'the tests never call the entry points that arm the native call' {
+  $text = Get-Content -LiteralPath $PSCommandPath -Raw
+  foreach ($entry in ('::Run' + 'Forever'), ('::Run' + 'TestDump')) {
+    Assert-False $text.Contains($entry) $entry
   }
 }
 

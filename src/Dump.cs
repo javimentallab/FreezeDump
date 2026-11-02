@@ -10,7 +10,7 @@ using System.Threading;
 namespace FreezeDump
 {
     // Second safety catch next to the simulation: the native call refuses to run until the real
-    // entry points in Program arm this gate. Simulations and tests never can (Arm is internal).
+    // entry points in Program arm this gate. Simulations and tests do not call those entry points.
     public static class LiveDumpGate
     {
         static volatile bool armed;

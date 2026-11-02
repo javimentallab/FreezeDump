@@ -116,8 +116,7 @@ namespace FreezeDump
         // Blocks forever. It only returns if another instance already holds the mutex.
         public static int RunForever(WatchdogConfig cfg)
         {
-            Directory.CreateDirectory(cfg.LogDir);
-            Directory.CreateDirectory(cfg.DumpDir);
+            string folders = DataFolders.Prepare(DataFolders.ProcessIsElevated(), cfg.LogDir, cfg.DumpDir);
             IClock clock = new SystemClock();
             var log = new Logger(cfg.LogDir, clock, false, false);
 
@@ -135,6 +134,7 @@ namespace FreezeDump
             var dumps = new DumpManager(cfg, clock, log, new LiveKernelDump(), Notifiers.FromConfig(cfg, log));
             var watchdog = new Watchdog(cfg, clock, log, new ProcessProbe(clock), new ProcessSampler(clock), dumps);
             watchdog.Start(Environment.ProcessId, privilege);
+            log.Write(folders);
 
             if (cfg.Listener.Enabled)
                 new CommandListener(cfg.Listener, watchdog.Status, dumps.TryRequest, log).Start();
@@ -161,7 +161,7 @@ namespace FreezeDump
         // One real dump on request, to check that this PC supports it. The caller asks for confirmation.
         public static string RunTestDump(WatchdogConfig cfg)
         {
-            Directory.CreateDirectory(cfg.DumpDir);
+            string folders = DataFolders.Prepare(DataFolders.ProcessIsElevated(), cfg.DumpDir);
             string privilege = LiveKernelDump.EnableDebugPrivilege();
             string path = Path.Combine(cfg.DumpDir, "test-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", Fmt.Inv) + ".dmp");
             LiveDumpGate.Arm();
@@ -173,14 +173,14 @@ namespace FreezeDump
                 status = new LiveKernelDump().Write(fs);
                 length = fs.Length;
             }
-            return "SeDebugPrivilege: " + privilege + "\nstatus 0x" + status.ToString("X8", Fmt.Inv) + ", " + Fmt.Size(length) + ", " +
+            return folders + "\nSeDebugPrivilege: " + privilege + "\nstatus 0x" + status.ToString("X8", Fmt.Inv) + ", " + Fmt.Size(length) + ", " +
                    Fmt.F1(watch.Elapsed.TotalSeconds) + " s -> " + path;
         }
 
         public static string SendTestNotification(WatchdogConfig cfg)
         {
             if (!cfg.Ntfy.Enabled) return "notifications are off: 'ntfy.url' is empty";
-            Directory.CreateDirectory(cfg.LogDir);
+            DataFolders.Prepare(DataFolders.ProcessIsElevated(), cfg.LogDir);
             var log = new Logger(cfg.LogDir, new SystemClock(), true, false);
             new NtfyNotifier(cfg.Ntfy.Url, cfg.Ntfy.Token, log).Send("FreezeDump test", "If you can read this, notifications work.");
             return "test notification attempted (the line above has the result)";

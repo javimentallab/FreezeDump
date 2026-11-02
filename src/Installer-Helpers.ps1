@@ -55,6 +55,53 @@ function Remove-WatchdogFirewallRule {
   }
 }
 
+# The folder that the installed config sets with "dataDir", if it is not the data folder itself.
+# A config that can not be read must not stop the uninstall, so that only gets a warning.
+function Get-ConfiguredDataDir {
+  param([string]$DataDir, [string]$LoadTypesScript)
+  $configPath = Join-Path $DataDir 'config.json'
+  if (-not (Test-Path -LiteralPath $configPath)) { return $null }
+  try {
+    . $LoadTypesScript
+    $configured = [FreezeDump.WatchdogConfig]::Load($configPath).DataDir
+  }
+  catch {
+    Write-Warning "Could not read ${configPath}: $($_.Exception.Message) If it sets its own dataDir, delete the logs and dumps there by hand."
+    return $null
+  }
+  if ([IO.Path]::GetFullPath($configured).TrimEnd('\') -ieq [IO.Path]::GetFullPath($DataDir).TrimEnd('\')) { return $null }
+  return $configured
+}
+
+# Deletes the logs and dumps that this program wrote in a folder set by the config. That folder can
+# be any folder, with other things in it, so there is no recursive delete here: only files named as
+# this program names them, and then the folders that are left empty.
+function Remove-WatchdogFile {
+  [CmdletBinding(SupportsShouldProcess)]
+  param([string]$Folder)
+  $owned = @(
+    @{ Dir = 'dumps'; Name = '^((hang|test)-\d{8}-\d{6}(-rescued(-\d+)?)?|reserve-\d+)\.dmp$' },
+    @{ Dir = 'logs'; Name = '^\d{4}-\d{2}-\d{2}\.log$' }
+  )
+  foreach ($part in $owned) {
+    $dir = Join-Path $Folder $part.Dir
+    if (-not (Test-Path -LiteralPath $dir)) { continue }
+    foreach ($file in Get-ChildItem -LiteralPath $dir -File -Force) {
+      if ($file.Name -match $part.Name -and $PSCmdlet.ShouldProcess($file.FullName, 'Delete this log or dump')) {
+        Remove-Item -LiteralPath $file.FullName -Force
+      }
+    }
+  }
+  foreach ($dir in (Join-Path $Folder 'dumps'), (Join-Path $Folder 'logs'), $Folder) {
+    if (-not (Test-Path -LiteralPath $dir)) { continue }
+    $isRoot = [IO.Path]::GetPathRoot($dir).TrimEnd('\') -ieq $dir.TrimEnd('\')
+    if ($isRoot -or (Get-ChildItem -LiteralPath $dir -Force | Select-Object -First 1)) { continue }
+    if ($PSCmdlet.ShouldProcess($dir, 'Delete this empty folder')) {
+      Remove-Item -LiteralPath $dir -Force
+    }
+  }
+}
+
 # Well-known SIDs, because group names change with the Windows language.
 function Set-RestrictedAcl {
   [CmdletBinding(SupportsShouldProcess)]

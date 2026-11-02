@@ -1,13 +1,67 @@
-// Shared building blocks: clocks, the write-through logger and number formatting.
+// Shared building blocks: clocks, the write-through logger, number formatting and the data folders.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 
 namespace FreezeDump
 {
+    // Dumps hold kernel memory and logs say what was running, so only SYSTEM and Administrators can
+    // reach them, wherever the config puts them. Only the "logs" and "dumps" folders are locked, not
+    // "dataDir" itself: that can be any folder on the PC, even one that holds other things.
+    public static class DataFolders
+    {
+        public static bool ProcessIsElevated()
+        {
+            using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+                return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        // Creates the folders and returns a line for the log. An elevated process keeps its access,
+        // through Administrators. One that is not elevated would lock itself out of its own log, and
+        // can not request a dump anyway, so it leaves the rights as they are.
+        // If a folder can not be locked this throws: the caller must not write a dump in there.
+        public static string Prepare(bool elevated, params string[] folders)
+        {
+            foreach (string folder in folders)
+            {
+                try
+                {
+                    Directory.CreateDirectory(folder);
+                    if (elevated) Restrict(folder);
+                }
+                catch (Exception e)
+                {
+                    // No inner exception: the startup error shows the innermost message only.
+                    throw new InvalidOperationException("cannot prepare " + folder + ": " + e.Message);
+                }
+            }
+            return elevated
+                ? "data folders restricted to SYSTEM and Administrators"
+                : "data folders NOT restricted: this process is not elevated";
+        }
+
+        static void Restrict(string folder)
+        {
+            var security = new DirectorySecurity();
+            security.SetAccessRuleProtection(true, false);
+            foreach (WellKnownSidType sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
+            {
+                security.AddAccessRule(new FileSystemAccessRule(
+                    new SecurityIdentifier(sid, null),
+                    FileSystemRights.FullControl,
+                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                    PropagationFlags.None,
+                    AccessControlType.Allow));
+            }
+            new DirectoryInfo(folder).SetAccessControl(security);
+        }
+    }
+
     public interface IClock
     {
         DateTime Now { get; }

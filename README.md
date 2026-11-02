@@ -79,7 +79,8 @@ Not tested on Windows 10, Windows Server, earlier Windows 11 versions or ARM64.
 ### Other limits
 
 - **It needs administrator rights.** The call requires `SeDebugPrivilege`, so the task runs elevated. Without
-  elevation the log shows `SeDebugPrivilege: AdjustTokenPrivileges error 1300` and dumps fail.
+  elevation the log shows `SeDebugPrivilege: AdjustTokenPrivileges error 1300` and dumps fail, and the `logs`
+  and `dumps` folders are not locked, so that the process keeps access to them.
 - **A dump briefly freezes the whole PC**, about 2 s in the tests above.
 - **A dump can succeed and still be incomplete.** Microsoft says the capture temporarily needs enough free
   physical memory to hold a copy of what it writes.
@@ -95,6 +96,7 @@ Not tested on Windows 10, Windows Server, earlier Windows 11 versions or ARM64.
 | The reserve files could not be opened | It is logged, and the dump creates its file at that moment, which is what may have failed before |
 | The watchdog process dies | The task restarts it every minute, up to 999 times |
 | The config has an error | It does not start. The reason is in `startup-error.log` in `%ProgramData%\FreezeDump` |
+| The `logs` or `dumps` folder can not be locked | It does not start, because other users could read the dumps. The reason is in `startup-error.log` too |
 
 A notification can also fail during a hang. The log is what to check first.
 
@@ -105,14 +107,29 @@ A notification can also fail during a hang. The log is what to check first.
   the kernel memory in use. The 4 kept by default would take about 10 GB at that size. Older ones are deleted.
 - **Reserve files:** `reserve-1.dmp` and `reserve-2.dmp` take 0 bytes until used.
 - **Logs:** about 2 MB per day, kept for 30 days.
-- **Privacy:** dumps hold kernel memory, which can include passwords, keys and network data. The folder
-  is readable by administrators only. Do not post a dump publicly.
+- **Privacy:** dumps hold kernel memory, which can include passwords, keys and network data. The `logs` and
+  `dumps` folders are readable by administrators only, also with your own `dataDir`: the watchdog locks them
+  every time it starts. Do not post a dump publicly.
 
 ## Requirements
 
-- Windows x64 and [PowerShell 7.2 or later](https://github.com/PowerShell/PowerShell) (only 7.6 has been
+- Windows x64 and [PowerShell 7.4 or later](https://github.com/PowerShell/PowerShell) (only 7.6 has been
   tested). Windows PowerShell 5.1 is refused with a clear error.
 - Administrator rights to install and to run. No admin rights are needed for the simulation or the tests.
+
+## Get the code
+
+```powershell
+git clone https://github.com/javimentallab/FreezeDump
+cd FreezeDump
+```
+
+If you download the ZIP instead, Windows marks its files as coming from the internet and PowerShell refuses to
+run them. Unblock them once, from the unzipped folder:
+
+```powershell
+Get-ChildItem -Recurse -File | Unblock-File
+```
 
 ## Try it safely
 
@@ -144,7 +161,7 @@ Then check that your PC supports the call. This requests **one real dump**: it a
 about 2 s and writes several GB.
 
 ```powershell
-& "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
+pwsh -File "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
 ```
 
 A healthy result is `status 0x00000000`. Delete the `test-*.dmp` file afterwards.
@@ -159,11 +176,15 @@ From an elevated PowerShell 7 prompt, in this folder or in the installed one:
 .\uninstall.ps1 -RemoveData   # deletes them too
 ```
 
+In a folder set with `dataDir`, `-RemoveData` only deletes the logs and dumps that the watchdog wrote, and the
+folders that this leaves empty. Anything else in there stays.
+
 ## Configuration
 
 Installed at `%ProgramData%\FreezeDump\config.json`, based on [`config.example.json`](config.example.json).
 Unknown settings and out-of-range values are errors. Check a file with `watchdog.ps1 -CheckConfig -ConfigPath <file>`.
-Restart the watchdog after a change: log off and on again, or run `install.ps1` again.
+Restart the watchdog after a change: log off and on again, or run `install.ps1` again. Running it again keeps the
+installed config. To replace that with the `config.json` in this folder, use `.\install.ps1 -ReplaceConfig`.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -219,8 +240,12 @@ pwsh -File tests/run-tests.ps1
 ```
 
 They cover detection, configuration, the simulation and the listener, with no dependencies. They never request
-a dump: the native call is behind a gate that they can not open. They do not exercise the real dump,
-`install.ps1` or `uninstall.ps1` beyond `-WhatIf`, or a real notification.
+a dump: the native call is behind a gate that only the real entry points open, and the tests do not call those.
+They run `install.ps1` and `uninstall.ps1` only with `-WhatIf` and temporary folders, and they do not exercise the
+real dump or a real notification.
+
+CI also runs CodeQL on the C#, Trivy, and [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer) on the
+scripts. To run that last one here, use `tests/run-analyzer.ps1`, which needs the module.
 
 ## Contributing
 

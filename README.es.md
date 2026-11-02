@@ -80,7 +80,8 @@ Sin probar en Windows 10, Windows Server, versiones anteriores de Windows 11 ni 
 ### Otros límites
 
 - **Requiere permisos de administrador.** La llamada exige `SeDebugPrivilege`, así que la tarea se ejecuta elevada.
-  Sin elevar, el log muestra `SeDebugPrivilege: AdjustTokenPrivileges error 1300` y los volcados fallan.
+  Sin elevar, el log muestra `SeDebugPrivilege: AdjustTokenPrivileges error 1300` y los volcados fallan, y las
+  carpetas `logs` y `dumps` no se bloquean, para que el proceso siga teniendo acceso a ellas.
 - **Un volcado congela brevemente todo el PC**, unos 2 s en las pruebas de arriba.
 - **Un volcado puede salir bien y estar incompleto.** Microsoft avisa de que la captura necesita temporalmente
   memoria física libre suficiente para guardar una copia de lo que escribe.
@@ -96,6 +97,7 @@ Sin probar en Windows 10, Windows Server, versiones anteriores de Windows 11 ni 
 | No se pudieron abrir los ficheros de reserva | Se apunta en el log, y el volcado crea su fichero en ese momento, que es lo que quizá falló antes |
 | Se muere el proceso del vigilante | La tarea lo reinicia cada minuto, hasta 999 veces |
 | La configuración tiene un error | No arranca. El motivo está en `startup-error.log`, en `%ProgramData%\FreezeDump` |
+| No se puede bloquear la carpeta `logs` o `dumps` | No arranca, porque otros usuarios podrían leer los volcados. El motivo también está en `startup-error.log` |
 
 Durante un cuelgue también puede fallar el aviso. Lo primero que hay que mirar es el log.
 
@@ -108,13 +110,28 @@ Durante un cuelgue también puede fallar el aviso. Lo primero que hay que mirar 
 - **Ficheros de reserva:** `reserve-1.dmp` y `reserve-2.dmp` ocupan 0 bytes hasta que se usan.
 - **Logs:** unos 2 MB al día, se guardan 30 días.
 - **Privacidad:** los volcados contienen memoria del núcleo, que puede incluir contraseñas, claves y datos de red.
-  La carpeta solo la pueden leer los administradores. No publiques un volcado.
+  Las carpetas `logs` y `dumps` solo las pueden leer los administradores, también con tu propio `dataDir`: el
+  vigilante las bloquea cada vez que arranca. No publiques un volcado.
 
 ## Requisitos
 
-- Windows x64 y [PowerShell 7.2 o posterior](https://github.com/PowerShell/PowerShell) (solo se ha probado la 7.6).
+- Windows x64 y [PowerShell 7.4 o posterior](https://github.com/PowerShell/PowerShell) (solo se ha probado la 7.6).
   Windows PowerShell 5.1 se rechaza con un error claro.
 - Permisos de administrador para instalarlo y ejecutarlo. La simulación y las pruebas no los necesitan.
+
+## Obtener el código
+
+```powershell
+git clone https://github.com/javimentallab/FreezeDump
+cd FreezeDump
+```
+
+Si en lugar de eso descargas el ZIP, Windows marca sus ficheros como venidos de internet y PowerShell se niega a
+ejecutarlos. Desbloquéalos una vez, desde la carpeta descomprimida:
+
+```powershell
+Get-ChildItem -Recurse -File | Unblock-File
+```
 
 ## Pruébalo sin riesgo
 
@@ -146,7 +163,7 @@ Después, comprueba que tu PC admite la llamada. Esto pide **un volcado real**: 
 2 s y escribe varios GB.
 
 ```powershell
-& "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
+pwsh -File "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
 ```
 
 Un resultado correcto es `status 0x00000000`. Borra luego el fichero `test-*.dmp`.
@@ -161,12 +178,16 @@ Desde una consola de PowerShell 7 elevada, en esta carpeta o en la instalada:
 .\uninstall.ps1 -RemoveData   # los borra también
 ```
 
+En una carpeta indicada con `dataDir`, `-RemoveData` solo borra los logs y volcados que escribió el vigilante, y
+las carpetas que eso deje vacías. Todo lo demás que haya se queda.
+
 ## Configuración
 
 Se instala en `%ProgramData%\FreezeDump\config.json`, a partir de [`config.example.json`](config.example.json).
 Los ajustes desconocidos y los valores fuera de rango dan error. Comprueba un fichero con
 `watchdog.ps1 -CheckConfig -ConfigPath <fichero>`. Tras un cambio hay que reiniciar el vigilante: cierra e inicia
-sesión, o vuelve a ejecutar `install.ps1`.
+sesión, o vuelve a ejecutar `install.ps1`. Al volver a ejecutarlo se conserva la configuración instalada. Para
+sustituirla por el `config.json` de esta carpeta, usa `.\install.ps1 -ReplaceConfig`.
 
 | Ajuste | Por defecto | Significado |
 |---|---|---|
@@ -222,8 +243,13 @@ pwsh -File tests/run-tests.ps1
 ```
 
 Cubren la detección, la configuración, la simulación y la escucha, sin dependencias. Nunca piden un volcado: la
-llamada nativa está detrás de una barrera que no pueden abrir. No ejercitan el volcado real, `install.ps1` ni
-`uninstall.ps1` más allá de `-WhatIf`, ni un aviso real.
+llamada nativa está detrás de una barrera que solo abren los puntos de entrada reales, y las pruebas no los llaman.
+Ejecutan `install.ps1` y `uninstall.ps1` solo con `-WhatIf` y carpetas temporales, y no ejercitan el volcado real ni
+un aviso real.
+
+La CI también ejecuta CodeQL sobre el C#, Trivy y, sobre los scripts,
+[PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer). Para ejecutar este último aquí, usa
+`tests/run-analyzer.ps1`, que necesita el módulo.
 
 ## Contribuir
 
