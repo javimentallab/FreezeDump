@@ -69,7 +69,7 @@ write-through has only been tried on a healthy PC.** It still needs the disk to 
 | 2 Nov 2026 | `-TestDump`, healthy PC | This version, 0.1.0 | OK: 2495 MB in 2.1 s, valid header, code `0x161`. cdb (WinDbg) opened it |
 | 2 Nov 2026 | **Real hang**, files opened in advance | Private prototype | **Hang detected at 45 s. The call returned, closing the file blocked. Only 1.1 GB of 2.7 GB reached the disk** |
 | 2 Nov 2026 | Over TCP, healthy PC, written through to disk | Private prototype | OK: 2820 MB in 3.4 s, valid header, code `0x161`. cdb (WinDbg) listed 327 processes, with no truncation warning |
-| Not yet | `-TestDump` and real hang, written through to disk | | **Never tested** |
+| Not yet | Real hang, written through to disk | | **Never tested** |
 
 Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same. This code has only
 requested a dump on a healthy PC, and the real hangs above happened with the prototype. Run
@@ -88,6 +88,9 @@ not been confirmed.
 
 **Only** Windows 11 Pro x64, version 26H2, build 26300.9711, with VBS and HVCI on, and PowerShell 7.6.
 Not tested on Windows 10, Windows Server, earlier Windows 11 versions or ARM64.
+
+`install.ps1`, `uninstall.ps1`, the scheduled task, the firewall rule and notifications to a real ntfy server
+have not been run for real yet. The automated tests only cover their logic.
 
 ### Other limits
 

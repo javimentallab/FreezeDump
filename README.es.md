@@ -71,7 +71,7 @@ probado con el PC sano.** Sigue necesitando que el disco acepte escrituras. El l
 | 2 nov 2026 | `-TestDump`, PC sano | Esta versión, 0.1.0 | Bien: 2495 MB en 2,1 s, cabecera válida, código `0x161`. cdb (WinDbg) lo abrió |
 | 2 nov 2026 | **Cuelgue real**, ficheros abiertos por adelantado | Prototipo privado | **Cuelgue detectado a los 45 s. La llamada terminó, cerrar el fichero se atascó. Solo 1,1 GB de 2,7 GB llegó a disco** |
 | 2 nov 2026 | Por TCP, PC sano, con escritura directa a disco | Prototipo privado | Bien: 2820 MB en 3,4 s, cabecera válida, código `0x161`. cdb (WinDbg) listó 327 procesos, sin aviso de fichero cortado |
-| Aún no | `-TestDump` y cuelgue real, con escritura directa a disco | | **Sin probar** |
+| Aún no | Cuelgue real, con escritura directa a disco | | **Sin probar** |
 
 La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma. Este código solo ha
 pedido volcados con el PC sano, y los cuelgues reales de arriba fueron con el prototipo. Ejecuta
@@ -90,6 +90,9 @@ tareas use esta misma llamada.
 
 **Solo** en Windows 11 Pro x64, versión 26H2, compilación 26300.9711, con VBS y HVCI activos, y PowerShell 7.6.
 Sin probar en Windows 10, Windows Server, versiones anteriores de Windows 11 ni ARM64.
+
+`install.ps1`, `uninstall.ps1`, la tarea programada, la regla del cortafuegos y los avisos a un servidor ntfy real
+aún no se han ejecutado de verdad. Las pruebas automáticas solo cubren su lógica.
 
 ### Otros límites
 
