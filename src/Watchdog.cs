@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public sealed class Watchdog
     {
@@ -35,7 +35,7 @@ namespace HangDumpWatchdog
 
         public void Start(int processId, string debugPrivilege)
         {
-            log.Write("=== HangDumpWatchdog " + Program.Version + " starting, pid " + processId + ", SeDebugPrivilege: " + debugPrivilege);
+            log.Write("=== FreezeDump " + Program.Version + " starting, pid " + processId + ", SeDebugPrivilege: " + debugPrivilege);
             log.Write(cfg.Summary());
             dumps.Purge();
             dumps.PrepareReserves();
@@ -108,7 +108,7 @@ namespace HangDumpWatchdog
     public static class Program
     {
         public const string Version = "0.1.0";
-        const string MutexName = @"Global\HangDumpWatchdog";
+        const string MutexName = @"Global\FreezeDump";
         static Mutex instance;
 
         public const int ExitAlreadyRunning = 3;
@@ -182,7 +182,7 @@ namespace HangDumpWatchdog
             if (!cfg.Ntfy.Enabled) return "notifications are off: 'ntfy.url' is empty";
             Directory.CreateDirectory(cfg.LogDir);
             var log = new Logger(cfg.LogDir, new SystemClock(), true, false);
-            new NtfyNotifier(cfg.Ntfy.Url, cfg.Ntfy.Token, log).Send("HangDumpWatchdog test", "If you can read this, notifications work.");
+            new NtfyNotifier(cfg.Ntfy.Url, cfg.Ntfy.Token, log).Send("FreezeDump test", "If you can read this, notifications work.");
             return "test notification attempted (the line above has the result)";
         }
     }

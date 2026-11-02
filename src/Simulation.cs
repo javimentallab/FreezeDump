@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public sealed class ScriptedProbe : IProbe
     {
@@ -157,7 +157,7 @@ namespace HangDumpWatchdog
                 throw new ArgumentException("unknown scenario: " + scenario);
 
             bool temporary = string.IsNullOrEmpty(workDir);
-            string dir = temporary ? Path.Combine(Path.GetTempPath(), "hang-dump-watchdog-sim-" + Guid.NewGuid().ToString("N")) : workDir;
+            string dir = temporary ? Path.Combine(Path.GetTempPath(), "FreezeDump-sim-" + Guid.NewGuid().ToString("N")) : workDir;
             WatchdogConfig cfg = settings.CopyForSimulation(dir);
             cfg.SampleIntervalSeconds = ShownSampleEvery;
             Directory.CreateDirectory(cfg.LogDir);

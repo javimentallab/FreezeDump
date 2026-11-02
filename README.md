@@ -1,4 +1,4 @@
-# HangDumpWatchdog
+# FreezeDump
 
 [Versión en español](README.es.md)
 
@@ -55,10 +55,12 @@ reset, and the kernel call itself may be what blocked. In that case this fix doe
 | 31 Oct 2026 | **Real hang** | Private prototype | **Hang detected at 45 s. The dump never finished, no file** |
 | 31 Oct 2026 | Over TCP, healthy PC, with the fix | Private prototype | OK: 2273 MB in 1.4 s, valid header, code `0x161` |
 | Not yet | Real hang, with the fix | | **Never tested**: no real hang since then |
-| 1 Nov 2026 | Automated tests and simulation | This version, 0.1.0 | Pass. **This exact code has not requested a real dump yet** |
+| 1 Nov 2026 | Automated tests and simulation | This version, 0.1.0 | Pass |
+| 2 Nov 2026 | `-TestDump`, healthy PC | This version, 0.1.0 | OK: 2495 MB in 2.1 s, valid header, code `0x161`. cdb (WinDbg) opened it |
 
-Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same, but the real results
-above come from the prototype. Run [`-TestDump`](#install) to check it on your own PC.
+Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same. This code has only
+requested a dump on a healthy PC, and the real hang above happened with the prototype. Run
+[`-TestDump`](#install) to check it on your own PC.
 
 ### Undocumented API
 
@@ -92,13 +94,13 @@ Not tested on Windows 10, Windows Server, earlier Windows 11 versions or ARM64.
 | The PC is reset during a dump | At the next start, a reserve file that holds data is kept as `hang-*-rescued.dmp`. **It may be truncated and unusable** |
 | The reserve files could not be opened | It is logged, and the dump creates its file at that moment, which is what may have failed before |
 | The watchdog process dies | The task restarts it every minute, up to 999 times |
-| The config has an error | It does not start. The reason is in `startup-error.log` in `%ProgramData%\HangDumpWatchdog` |
+| The config has an error | It does not start. The reason is in `startup-error.log` in `%ProgramData%\FreezeDump` |
 
 A notification can also fail during a hang. The log is what to check first.
 
 ## Where the dumps go and how big they are
 
-- **Where:** `%ProgramData%\HangDumpWatchdog\dumps\hang-YYYYMMDD-HHMMSS.dmp`. Logs are in `logs\`.
+- **Where:** `%ProgramData%\FreezeDump\dumps\hang-YYYYMMDD-HHMMSS.dmp`. Logs are in `logs\`.
 - **How big:** 2.3 to 2.5 GB each on the test PC. It is kernel memory only, uncompressed, so it grows with
   the kernel memory in use. The 4 kept by default would take about 10 GB at that size. Older ones are deleted.
 - **Reserve files:** `reserve-1.dmp` and `reserve-2.dmp` take 0 bytes until used.
@@ -133,8 +135,8 @@ Copy-Item config.example.json config.json   # optional: edit it first, it is ign
 .\install.ps1
 ```
 
-This copies the program to `%ProgramFiles%\HangDumpWatchdog`, creates `%ProgramData%\HangDumpWatchdog`
-readable by administrators only, and registers the task `Hang Dump Watchdog`. The task runs elevated when you
+This copies the program to `%ProgramFiles%\FreezeDump`, creates `%ProgramData%\FreezeDump`
+readable by administrators only, and registers the task `FreezeDump`. The task runs elevated when you
 log on, with no UAC prompt and no window. If you elevate with a different account, name yours with `-User`. A
 firewall rule is only added if the listener is enabled for other machines.
 
@@ -142,7 +144,7 @@ Then check that your PC supports the call. This requests **one real dump**: it a
 about 2 s and writes several GB.
 
 ```powershell
-& "$env:ProgramFiles\HangDumpWatchdog\src\watchdog.ps1" -TestDump
+& "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
 ```
 
 A healthy result is `status 0x00000000`. Delete the `test-*.dmp` file afterwards.
@@ -159,7 +161,7 @@ From an elevated PowerShell 7 prompt, in this folder or in the installed one:
 
 ## Configuration
 
-Installed at `%ProgramData%\HangDumpWatchdog\config.json`, based on [`config.example.json`](config.example.json).
+Installed at `%ProgramData%\FreezeDump\config.json`, based on [`config.example.json`](config.example.json).
 Unknown settings and out-of-range values are errors. Check a file with `watchdog.ps1 -CheckConfig -ConfigPath <file>`.
 Restart the watchdog after a change: log off and on again, or run `install.ps1` again.
 

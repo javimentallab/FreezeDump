@@ -1,4 +1,4 @@
-# HangDumpWatchdog
+# FreezeDump
 
 [English version](README.md)
 
@@ -56,10 +56,12 @@ este arreglo no sirve.
 | 31 oct 2026 | **Cuelgue real** | Prototipo privado | **Cuelgue detectado a los 45 s. El volcado nunca terminó, sin fichero** |
 | 31 oct 2026 | Por TCP, PC sano, con el arreglo | Prototipo privado | Bien: 2273 MB en 1,4 s, cabecera válida, código `0x161` |
 | Aún no | Cuelgue real, con el arreglo | | **Sin probar**: no ha habido ningún cuelgue real desde entonces |
-| 1 nov 2026 | Pruebas automáticas y simulación | Esta versión, 0.1.0 | Pasan. **Este código exacto aún no ha pedido ningún volcado real** |
+| 1 nov 2026 | Pruebas automáticas y simulación | Esta versión, 0.1.0 | Pasan |
+| 2 nov 2026 | `-TestDump`, PC sano | Esta versión, 0.1.0 | Bien: 2495 MB en 2,1 s, cabecera válida, código `0x161`. cdb (WinDbg) lo abrió |
 
-La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma, pero los resultados
-reales de arriba son del prototipo. Ejecuta [`-TestDump`](#instalar) para comprobarlo en tu PC.
+La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma. Este código solo ha
+pedido volcados con el PC sano, y el cuelgue real de arriba fue con el prototipo. Ejecuta
+[`-TestDump`](#instalar) para comprobarlo en tu PC.
 
 ### API sin documentar
 
@@ -93,13 +95,13 @@ Sin probar en Windows 10, Windows Server, versiones anteriores de Windows 11 ni 
 | El PC se reinicia durante un volcado | En el siguiente arranque, un fichero de reserva con datos se guarda como `hang-*-rescued.dmp`. **Puede estar cortado e inservible** |
 | No se pudieron abrir los ficheros de reserva | Se apunta en el log, y el volcado crea su fichero en ese momento, que es lo que quizá falló antes |
 | Se muere el proceso del vigilante | La tarea lo reinicia cada minuto, hasta 999 veces |
-| La configuración tiene un error | No arranca. El motivo está en `startup-error.log`, en `%ProgramData%\HangDumpWatchdog` |
+| La configuración tiene un error | No arranca. El motivo está en `startup-error.log`, en `%ProgramData%\FreezeDump` |
 
 Durante un cuelgue también puede fallar el aviso. Lo primero que hay que mirar es el log.
 
 ## Dónde van los volcados y cuánto ocupan
 
-- **Dónde:** `%ProgramData%\HangDumpWatchdog\dumps\hang-AAAAMMDD-HHMMSS.dmp`. Los logs están en `logs\`.
+- **Dónde:** `%ProgramData%\FreezeDump\dumps\hang-AAAAMMDD-HHMMSS.dmp`. Los logs están en `logs\`.
 - **Cuánto:** de 2,3 a 2,5 GB cada uno en el PC de pruebas. Es solo memoria del núcleo, sin comprimir, así que crece
   con la memoria del núcleo en uso. Los 4 que se guardan por defecto serían unos 10 GB a ese tamaño. Los más viejos
   se borran.
@@ -135,8 +137,8 @@ Copy-Item config.example.json config.json   # opcional: edítalo antes, git lo i
 .\install.ps1
 ```
 
-Esto copia el programa a `%ProgramFiles%\HangDumpWatchdog`, crea `%ProgramData%\HangDumpWatchdog` con lectura solo
-para administradores y registra la tarea `Hang Dump Watchdog`. La tarea se ejecuta elevada al iniciar sesión, sin
+Esto copia el programa a `%ProgramFiles%\FreezeDump`, crea `%ProgramData%\FreezeDump` con lectura solo
+para administradores y registra la tarea `FreezeDump`. La tarea se ejecuta elevada al iniciar sesión, sin
 aviso de UAC y sin ventana. Si elevas con otra cuenta, indica la tuya con `-User`. Solo se añade una regla de
 cortafuegos si la escucha se activa para otras máquinas.
 
@@ -144,7 +146,7 @@ Después, comprueba que tu PC admite la llamada. Esto pide **un volcado real**: 
 2 s y escribe varios GB.
 
 ```powershell
-& "$env:ProgramFiles\HangDumpWatchdog\src\watchdog.ps1" -TestDump
+& "$env:ProgramFiles\FreezeDump\src\watchdog.ps1" -TestDump
 ```
 
 Un resultado correcto es `status 0x00000000`. Borra luego el fichero `test-*.dmp`.
@@ -161,7 +163,7 @@ Desde una consola de PowerShell 7 elevada, en esta carpeta o en la instalada:
 
 ## Configuración
 
-Se instala en `%ProgramData%\HangDumpWatchdog\config.json`, a partir de [`config.example.json`](config.example.json).
+Se instala en `%ProgramData%\FreezeDump\config.json`, a partir de [`config.example.json`](config.example.json).
 Los ajustes desconocidos y los valores fuera de rango dan error. Comprueba un fichero con
 `watchdog.ps1 -CheckConfig -ConfigPath <fichero>`. Tras un cambio hay que reiniciar el vigilante: cierra e inicia
 sesión, o vuelve a ejecutar `install.ps1`.

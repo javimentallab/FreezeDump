@@ -5,7 +5,7 @@ using System.IO;
 using System.Net;
 using System.Text.Json;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public sealed class ConfigException : Exception
     {
@@ -49,7 +49,7 @@ namespace HangDumpWatchdog
 
         public static string DefaultDataDir()
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "HangDumpWatchdog");
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FreezeDump");
         }
 
         public static string DefaultConfigPath()

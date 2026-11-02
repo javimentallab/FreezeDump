@@ -9,8 +9,8 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-  [string]$InstallDir = (Join-Path $env:ProgramFiles 'HangDumpWatchdog'),
-  [string]$DataDir = (Join-Path $env:ProgramData 'HangDumpWatchdog'),
+  [string]$InstallDir = (Join-Path $env:ProgramFiles 'FreezeDump'),
+  [string]$DataDir = (Join-Path $env:ProgramData 'FreezeDump'),
   [switch]$RemoveData
 )
 $ErrorActionPreference = 'Stop'

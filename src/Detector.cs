@@ -1,5 +1,5 @@
 // Hang detection. Pure logic: it decides, it never acts, so it can be tested without a hang.
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public struct DetectorDecision
     {

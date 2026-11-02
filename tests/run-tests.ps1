@@ -86,27 +86,27 @@ function Assert-InOrder {
   }
 }
 
-$Parse = { param($Json) [HangDumpWatchdog.WatchdogConfig]::Parse($Json, 'C:\Data\Watchdog') }
-$NewDetector = { param($Hang = 45, $Max = 2, $Gap = 150) [HangDumpWatchdog.HangDetector]::new($Hang, $Max, $Gap) }
+$Parse = { param($Json) [FreezeDump.WatchdogConfig]::Parse($Json, 'C:\Data\Watchdog') }
+$NewDetector = { param($Hang = 45, $Max = 2, $Gap = 150) [FreezeDump.HangDetector]::new($Hang, $Max, $Gap) }
 $Inf = [double]::PositiveInfinity
 
 Write-Host 'Safety'
 
 Test-Case 'the native dump is not armed when the tests start' {
-  Assert-False ([HangDumpWatchdog.LiveDumpGate]::Armed)
+  Assert-False ([FreezeDump.LiveDumpGate]::Armed)
 }
 
 Test-Case 'the gate refuses while it is not armed' {
-  Assert-Throws { [HangDumpWatchdog.LiveDumpGate]::EnsureArmed() } 'not armed'
+  Assert-Throws { [FreezeDump.LiveDumpGate]::EnsureArmed() } 'not armed'
 }
 
 Test-Case 'tests cannot arm the gate: Arm is not public' {
-  $arm = [HangDumpWatchdog.LiveDumpGate].GetMethod('Arm', [Reflection.BindingFlags]'Public,Static')
+  $arm = [FreezeDump.LiveDumpGate].GetMethod('Arm', [Reflection.BindingFlags]'Public,Static')
   Assert-True ($null -eq $arm)
 }
 
 Test-Case 'the native structure keeps its 64-byte layout' {
-  Assert-Equal 64 ([HangDumpWatchdog.LiveKernelDump]::ControlStructSize)
+  Assert-Equal 64 ([FreezeDump.LiveKernelDump]::ControlStructSize)
 }
 
 Write-Host 'Detection'
@@ -182,8 +182,8 @@ Test-Case 'a new hang gets a new allowance of dumps' {
 }
 
 Test-Case 'the real probe times a real short process' {
-  $clock = [HangDumpWatchdog.SystemClock]::new()
-  $probe = [HangDumpWatchdog.ProcessProbe]::new($clock)
+  $clock = [FreezeDump.SystemClock]::new()
+  $probe = [FreezeDump.ProcessProbe]::new($clock)
   Assert-True ($probe.LastMs -lt 0)
   $probe.Kick()
   $limit = [DateTime]::Now.AddSeconds(20)
@@ -195,7 +195,7 @@ Test-Case 'the real probe times a real short process' {
 }
 
 Test-Case 'the real sampler reads the system' {
-  $sample = [HangDumpWatchdog.ProcessSampler]::new([HangDumpWatchdog.SystemClock]::new()).Sample()
+  $sample = [FreezeDump.ProcessSampler]::new([FreezeDump.SystemClock]::new()).Sample()
   Assert-True ($sample.ProcessCount -gt 0)
   Assert-True ($sample.RamPercent -gt 0 -and $sample.RamPercent -le 100)
 }
@@ -203,15 +203,15 @@ Test-Case 'the real sampler reads the system' {
 Write-Host 'Configuration'
 
 Test-Case 'the defaults are valid and keep extras off' {
-  $c = [HangDumpWatchdog.WatchdogConfig]::Defaults()
+  $c = [FreezeDump.WatchdogConfig]::Defaults()
   Assert-Equal 45 $c.HangSeconds
   Assert-False $c.Ntfy.Enabled
   Assert-False $c.Listener.Enabled
 }
 
 Test-Case 'config.example.json loads and matches the defaults' {
-  $c = [HangDumpWatchdog.WatchdogConfig]::Load((Join-Path $root 'config.example.json'))
-  $d = [HangDumpWatchdog.WatchdogConfig]::Defaults()
+  $c = [FreezeDump.WatchdogConfig]::Load((Join-Path $root 'config.example.json'))
+  $d = [FreezeDump.WatchdogConfig]::Defaults()
   foreach ($name in 'HangSeconds', 'ProbeIntervalSeconds', 'SampleIntervalSeconds', 'MaxDumpsPerHang', 'MinSecondsBetweenDumps', 'KeepDumps', 'ReserveFiles', 'LogRetentionDays') {
     Assert-Equal $d.$name $c.$name $name
   }
@@ -297,13 +297,13 @@ Test-Case 'tokens never appear in the summary' {
 }
 
 Test-Case 'the notification request is well formed and only sends a token if there is one' {
-  $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
-  $request = [HangDumpWatchdog.NtfyNotifier]::new('https://ntfy.example.com/t', 'tk_abc', $log).BuildRequest('Title', 'Body')
+  $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
+  $request = [FreezeDump.NtfyNotifier]::new('https://ntfy.example.com/t', 'tk_abc', $log).BuildRequest('Title', 'Body')
   Assert-Equal 'POST' $request.Method.Method
   Assert-Equal 'https://ntfy.example.com/t' $request.RequestUri.AbsoluteUri
   Assert-Equal 'Bearer tk_abc' ($request.Headers.GetValues('Authorization') -join '')
   Assert-Equal 'Title' ($request.Headers.GetValues('Title') -join '')
-  $request = [HangDumpWatchdog.NtfyNotifier]::new('https://ntfy.example.com/t', '', $log).BuildRequest('Title', 'Body')
+  $request = [FreezeDump.NtfyNotifier]::new('https://ntfy.example.com/t', '', $log).BuildRequest('Title', 'Body')
   Assert-False $request.Headers.Contains('Authorization')
 }
 
@@ -347,9 +347,9 @@ Test-Case 'a notification really goes out, to a local test server' {
   $server.Start()
   try {
     $port = $server.LocalEndpoint.Port
-    $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
+    $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
     $received = [FakeHttpServer]::ServeOnce($server)
-    [HangDumpWatchdog.NtfyNotifier]::new("http://127.0.0.1:$port/test-topic", 'tk_abc', $log).Send('Title text', 'Body text')
+    [FreezeDump.NtfyNotifier]::new("http://127.0.0.1:$port/test-topic", 'tk_abc', $log).Send('Title text', 'Body text')
     Assert-True $received.Wait(5000) 'the server got nothing'
     $request = $received.Result
     Assert-True ($request -like 'POST /test-topic HTTP/1.1*') "got: $request"
@@ -366,22 +366,22 @@ Test-Case 'a failed notification is logged, without the token, and does not stop
   $server.Start()
   $port = $server.LocalEndpoint.Port
   $server.Stop()
-  $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
-  [HangDumpWatchdog.NtfyNotifier]::new("http://127.0.0.1:$port/test-topic", 'tk_secret_value', $log).Send('T', 'B')
+  $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
+  [FreezeDump.NtfyNotifier]::new("http://127.0.0.1:$port/test-topic", 'tk_secret_value', $log).Send('T', 'B')
   Assert-True ((Get-Matching $log.Lines() 'ntfy failed').Count -eq 1)
   Assert-False (($log.Lines() -join ' ') -like '*tk_secret_value*')
 }
 
 Test-Case 'no ntfy URL means no notifier that can reach the network' {
-  $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
-  $notifier = [HangDumpWatchdog.Notifiers]::FromConfig((& $Parse '{}'), $log)
+  $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
+  $notifier = [FreezeDump.Notifiers]::FromConfig((& $Parse '{}'), $log)
   Assert-Equal 'NullNotifier' $notifier.GetType().Name
 }
 
 Write-Host 'Simulation'
 
-$Defaults = [HangDumpWatchdog.WatchdogConfig]::Defaults()
-$Sim = { param($Scenario, $Settings = $Defaults, $Dir = (New-WorkDir)) [HangDumpWatchdog.Simulation]::Run($Scenario, $Settings, $Dir, $false) }
+$Defaults = [FreezeDump.WatchdogConfig]::Defaults()
+$Sim = { param($Scenario, $Settings = $Defaults, $Dir = (New-WorkDir)) [FreezeDump.Simulation]::Run($Scenario, $Settings, $Dir, $false) }
 
 Test-Case 'ok: hang found, two dumps with a gap, renamed, recovered' {
   $r = & $Sim 'ok'
@@ -479,10 +479,10 @@ Test-Case 'old logs are purged after the retention period, recent ones stay' {
 }
 
 Test-Case 'a simulation never arms the native dump' {
-  foreach ($scenario in [HangDumpWatchdog.Simulation]::Scenarios()) {
+  foreach ($scenario in [FreezeDump.Simulation]::Scenarios()) {
     Assert-False (& $Sim $scenario).RealDumpsArmed $scenario
   }
-  Assert-False ([HangDumpWatchdog.LiveDumpGate]::Armed)
+  Assert-False ([FreezeDump.LiveDumpGate]::Armed)
 }
 
 Test-Case 'a simulation ignores configured notifications and listener' {
@@ -508,7 +508,7 @@ Test-Case 'with no folder given it uses a temporary one, not the current folder'
   $previous = [Environment]::CurrentDirectory
   [Environment]::CurrentDirectory = $dir
   try {
-    $r = [HangDumpWatchdog.Simulation]::Run('ok', $Defaults, $null, $false)
+    $r = [FreezeDump.Simulation]::Run('ok', $Defaults, $null, $false)
     Assert-Equal 2 $r.DumpFiles.Count
     Assert-Equal 0 @(Get-ChildItem -LiteralPath $dir -Force).Count 'files appeared in the current folder'
   }
@@ -518,11 +518,11 @@ Test-Case 'with no folder given it uses a temporary one, not the current folder'
 }
 
 Test-Case 'a relative simulation folder is refused' {
-  Assert-Throws { [HangDumpWatchdog.Simulation]::Run('ok', $Defaults, 'relative\dir', $false) } 'absolute path'
+  Assert-Throws { [FreezeDump.Simulation]::Run('ok', $Defaults, 'relative\dir', $false) } 'absolute path'
 }
 
 Test-Case 'an unknown scenario is refused' {
-  Assert-Throws { [HangDumpWatchdog.Simulation]::Run('nope', $Defaults, (New-WorkDir), $false) } 'unknown scenario'
+  Assert-Throws { [FreezeDump.Simulation]::Run('nope', $Defaults, (New-WorkDir), $false) } 'unknown scenario'
 }
 
 Test-Case 'a sampler that stops is reported, a slow but regular one is not' {
@@ -531,11 +531,11 @@ Test-Case 'a sampler that stops is reported, a slow but regular one is not' {
     $settings = & $Parse ('{ "sampleIntervalSeconds": ' + $case[0] + ' }')
     $settings = $settings.CopyForSimulation((New-WorkDir))
     New-Item -ItemType Directory -Path $settings.LogDir, $settings.DumpDir | Out-Null
-    $clock = [HangDumpWatchdog.ManualClock]::new([DateTime]'2026-01-01')
-    $log = [HangDumpWatchdog.Logger]::new($settings.LogDir, $clock, $false, $true)
-    $dumps = [HangDumpWatchdog.DumpManager]::new($settings, $clock, $log, [HangDumpWatchdog.SimulatedDumpWriter]::new([HangDumpWatchdog.SimulatedDumpMode]::Failure, $clock), [HangDumpWatchdog.NullNotifier]::new())
-    $probe = [HangDumpWatchdog.ScriptedProbe]::new($clock, 1e9, 1e9)
-    $watchdog = [HangDumpWatchdog.Watchdog]::new($settings, $clock, $log, $probe, [HangDumpWatchdog.SimulatedSampler]::new(), $dumps)
+    $clock = [FreezeDump.ManualClock]::new([DateTime]'2026-01-01')
+    $log = [FreezeDump.Logger]::new($settings.LogDir, $clock, $false, $true)
+    $dumps = [FreezeDump.DumpManager]::new($settings, $clock, $log, [FreezeDump.SimulatedDumpWriter]::new([FreezeDump.SimulatedDumpMode]::Failure, $clock), [FreezeDump.NullNotifier]::new())
+    $probe = [FreezeDump.ScriptedProbe]::new($clock, 1e9, 1e9)
+    $watchdog = [FreezeDump.Watchdog]::new($settings, $clock, $log, $probe, [FreezeDump.SimulatedSampler]::new(), $dumps)
     foreach ($second in 1..$case[1]) { $clock.Advance(1); $watchdog.Step() }
     $reported = (Get-Matching $log.Lines() 'SAMPLER STUCK').Count -gt 0
     Assert-Equal $case[2] $reported "interval $($case[0]) s, $($case[1]) s without a sample"
@@ -543,7 +543,7 @@ Test-Case 'a sampler that stops is reported, a slow but regular one is not' {
 }
 
 Test-Case 'simulation output has no false alarms' {
-  foreach ($scenario in [HangDumpWatchdog.Simulation]::Scenarios()) {
+  foreach ($scenario in [FreezeDump.Simulation]::Scenarios()) {
     Assert-Equal 0 (Get-Matching (& $Sim $scenario).Lines 'SAMPLER STUCK').Count $scenario
   }
 }
@@ -552,10 +552,10 @@ Test-Case 'dump requests are limited by the manager as well' {
   $dir = New-WorkDir
   $settings = $Defaults.CopyForSimulation($dir)
   New-Item -ItemType Directory -Path $settings.LogDir, $settings.DumpDir | Out-Null
-  $clock = [HangDumpWatchdog.ManualClock]::new([DateTime]'2026-01-01')
-  $log = [HangDumpWatchdog.Logger]::new($settings.LogDir, $clock, $false, $true)
-  $writer = [HangDumpWatchdog.SimulatedDumpWriter]::new([HangDumpWatchdog.SimulatedDumpMode]::Success, $clock)
-  $dumps = [HangDumpWatchdog.DumpManager]::new($settings, $clock, $log, $writer, [HangDumpWatchdog.NullNotifier]::new())
+  $clock = [FreezeDump.ManualClock]::new([DateTime]'2026-01-01')
+  $log = [FreezeDump.Logger]::new($settings.LogDir, $clock, $false, $true)
+  $writer = [FreezeDump.SimulatedDumpWriter]::new([FreezeDump.SimulatedDumpMode]::Success, $clock)
+  $dumps = [FreezeDump.DumpManager]::new($settings, $clock, $log, $writer, [FreezeDump.NullNotifier]::new())
   Assert-True $dumps.TryRequest('first')
   Assert-True $dumps.WaitIdle(10000)
   Assert-False $dumps.TryRequest('too soon')
@@ -570,10 +570,10 @@ Write-Host 'Listener'
 
 $NewListener = {
   param($Options)
-  $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
+  $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
   $status = [Func[string]] { 'pong test' }
   $dump = [Func[string, bool]] { param($why) $script:dumpCalls++; $true }
-  [HangDumpWatchdog.CommandListener]::new($Options, $status, $dump, $log)
+  [FreezeDump.CommandListener]::new($Options, $status, $dump, $log)
 }
 $Token = 'abcdefghijklmnopqrstuvwx'
 $Lan = [Net.IPAddress]::Parse('10.0.0.5')
@@ -610,16 +610,16 @@ Test-Case 'with no token configured a dump can not be requested' {
 }
 
 Test-Case 'round trip over a loopback socket, on a port picked by Windows' {
-  $options = [HangDumpWatchdog.ListenerOptions]::new()
+  $options = [FreezeDump.ListenerOptions]::new()
   $options.Port = 0
-  $log = [HangDumpWatchdog.Logger]::new((New-WorkDir), [HangDumpWatchdog.SystemClock]::new(), $false, $true)
+  $log = [FreezeDump.Logger]::new((New-WorkDir), [FreezeDump.SystemClock]::new(), $false, $true)
   # A status that does not need a PowerShell runspace on the listener thread.
-  $clock = [HangDumpWatchdog.ManualClock]::new([DateTime]'2026-01-01')
+  $clock = [FreezeDump.ManualClock]::new([DateTime]'2026-01-01')
   $settings = $Defaults.CopyForSimulation((New-WorkDir))
-  $dumps = [HangDumpWatchdog.DumpManager]::new($settings, $clock, $log, [HangDumpWatchdog.SimulatedDumpWriter]::new([HangDumpWatchdog.SimulatedDumpMode]::Failure, $clock), [HangDumpWatchdog.NullNotifier]::new())
-  $probe = [HangDumpWatchdog.ScriptedProbe]::new($clock, 1e9, 1e9)
-  $watchdog = [HangDumpWatchdog.Watchdog]::new($settings, $clock, $log, $probe, [HangDumpWatchdog.SimulatedSampler]::new(), $dumps)
-  $listener = [HangDumpWatchdog.CommandListener]::new($options, [Func[string]]$watchdog.Status, [Func[string, bool]]$dumps.TryRequest, $log)
+  $dumps = [FreezeDump.DumpManager]::new($settings, $clock, $log, [FreezeDump.SimulatedDumpWriter]::new([FreezeDump.SimulatedDumpMode]::Failure, $clock), [FreezeDump.NullNotifier]::new())
+  $probe = [FreezeDump.ScriptedProbe]::new($clock, 1e9, 1e9)
+  $watchdog = [FreezeDump.Watchdog]::new($settings, $clock, $log, $probe, [FreezeDump.SimulatedSampler]::new(), $dumps)
+  $listener = [FreezeDump.CommandListener]::new($options, [Func[string]]$watchdog.Status, [Func[string, bool]]$dumps.TryRequest, $log)
   Assert-True $listener.Start()
   try {
     Assert-True ($listener.BoundPort -gt 0)
@@ -640,11 +640,11 @@ Test-Case 'round trip over a loopback socket, on a port picked by Windows' {
 Write-Host 'Installer helpers'
 
 Test-Case 'only this exact watchdog script counts as the running watchdog' {
-  $script = 'C:\Program Files\HangDumpWatchdog\src\watchdog.ps1'
-  Assert-True (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine '"C:\pwsh.exe" -File "C:\Program Files\HangDumpWatchdog\src\watchdog.ps1" -ConfigPath "x"')
-  Assert-True (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine 'pwsh -File C:/Program Files/HangDumpWatchdog/src/watchdog.ps1')
+  $script = 'C:\Program Files\FreezeDump\src\watchdog.ps1'
+  Assert-True (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine '"C:\pwsh.exe" -File "C:\Program Files\FreezeDump\src\watchdog.ps1" -ConfigPath "x"')
+  Assert-True (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine 'pwsh -File C:/Program Files/FreezeDump/src/watchdog.ps1')
   Assert-False (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine 'pwsh -File "D:\other\src\watchdog.ps1"')
-  Assert-False (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine 'pwsh -File "C:\Program Files\HangDumpWatchdog\src\watchdog.ps1.bak"')
+  Assert-False (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine 'pwsh -File "C:\Program Files\FreezeDump\src\watchdog.ps1.bak"')
   Assert-False (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine '')
   Assert-False (Test-IsWatchdogCommandLine -ScriptPath $script -CommandLine $null)
 }
@@ -807,7 +807,7 @@ Test-Case 'no local paths, private addresses or tokens in the files' {
 
 Test-Case 'the version in the code is the newest one in the changelog' {
   $line = Get-Content -LiteralPath (Join-Path $root 'CHANGELOG.md') | Where-Object { $_ -match '^## \[\d' } | Select-Object -First 1
-  Assert-True ($line -like "## ``[$([HangDumpWatchdog.Program]::Version)``]*") "changelog says: $line"
+  Assert-True ($line -like "## ``[$([FreezeDump.Program]::Version)``]*") "changelog says: $line"
 }
 
 Test-Case 'the workflows limit permissions and avoid pull_request_target' {
@@ -826,7 +826,7 @@ Test-Case 'local config, logs and dumps are ignored by git' {
 }
 
 Test-Case 'the native dump is still not armed after everything else' {
-  Assert-False ([HangDumpWatchdog.LiveDumpGate]::Armed)
+  Assert-False ([FreezeDump.LiveDumpGate]::Armed)
 }
 
 try { Remove-Item -LiteralPath $workRoot -Recurse -Force } catch { Write-Host "note: could not remove $workRoot" }

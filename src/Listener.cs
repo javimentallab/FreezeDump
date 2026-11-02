@@ -9,7 +9,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public sealed class CommandListener
     {

@@ -1,5 +1,5 @@
 # Shared by install.ps1 and uninstall.ps1. The functions without side effects are covered by the tests.
-$script:TaskName = 'Hang Dump Watchdog'
+$script:TaskName = 'FreezeDump'
 
 function Test-IsAdministrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()

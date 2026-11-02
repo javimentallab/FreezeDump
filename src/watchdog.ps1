@@ -14,7 +14,7 @@
     -ShowVersion  Prints the version.
 
 .PARAMETER ConfigPath
-  Config file. Default: config.json in %ProgramData%\HangDumpWatchdog. With -Simulate no file is
+  Config file. Default: config.json in %ProgramData%\FreezeDump. With -Simulate no file is
   read unless this is given, and then only the timing settings are used.
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
@@ -38,16 +38,16 @@ if (@($modes).Count -gt 1) {
 . (Join-Path $PSScriptRoot 'Load-Types.ps1')
 
 if ($ShowVersion) {
-  "HangDumpWatchdog $([HangDumpWatchdog.Program]::Version)"
+  "FreezeDump $([FreezeDump.Program]::Version)"
   exit 0
 }
 
 function Get-Config {
   param([string]$Path, [switch]$IgnoreInstalledFile)
-  if ($Path) { return [HangDumpWatchdog.WatchdogConfig]::Load($Path) }
-  $default = [HangDumpWatchdog.WatchdogConfig]::DefaultConfigPath()
-  if ((-not $IgnoreInstalledFile) -and (Test-Path -LiteralPath $default)) { return [HangDumpWatchdog.WatchdogConfig]::Load($default) }
-  return [HangDumpWatchdog.WatchdogConfig]::Defaults()
+  if ($Path) { return [FreezeDump.WatchdogConfig]::Load($Path) }
+  $default = [FreezeDump.WatchdogConfig]::DefaultConfigPath()
+  if ((-not $IgnoreInstalledFile) -and (Test-Path -LiteralPath $default)) { return [FreezeDump.WatchdogConfig]::Load($default) }
+  return [FreezeDump.WatchdogConfig]::Defaults()
 }
 
 function Get-RootMessage {
@@ -61,10 +61,10 @@ try {
   if ($Simulate) {
     $settings = Get-Config -Path $ConfigPath -IgnoreInstalledFile
     # Straight to the console, because the simulation writes its log lines there too.
-    [Console]::Out.WriteLine("HangDumpWatchdog $([HangDumpWatchdog.Program]::Version) - SIMULATION, scenario: $Scenario")
+    [Console]::Out.WriteLine("FreezeDump $([FreezeDump.Program]::Version) - SIMULATION, scenario: $Scenario")
     [Console]::Out.WriteLine('Virtual clock. No kernel dump is requested, no process is started, nothing leaves this PC.')
     [Console]::Out.WriteLine()
-    $result = [HangDumpWatchdog.Simulation]::Run($Scenario, $settings, $null, $true)
+    $result = [FreezeDump.Simulation]::Run($Scenario, $settings, $null, $true)
     [Console]::Out.WriteLine()
     [Console]::Out.WriteLine("Simulated dump requests: $($result.DumpRequests). Simulated files kept: $($result.DumpFiles.Count). Real dumps: 0.")
     exit 0
@@ -79,27 +79,27 @@ try {
   }
 
   if ($TestNotify) {
-    [HangDumpWatchdog.Program]::SendTestNotification($config)
+    [FreezeDump.Program]::SendTestNotification($config)
     exit 0
   }
 
   if ($TestDump) {
     $target = "this PC, writing to $($config.DumpDir)"
     if ($PSCmdlet.ShouldProcess($target, 'Request ONE REAL live kernel dump (freezes the PC for about 2 s, writes several GB)')) {
-      [HangDumpWatchdog.Program]::RunTestDump($config)
+      [FreezeDump.Program]::RunTestDump($config)
       'Test dumps are not rotated: delete the test-*.dmp file when you are done. It holds kernel memory, do not share it.'
     }
     exit 0
   }
 
-  exit [HangDumpWatchdog.Program]::RunForever($config)
+  exit [FreezeDump.Program]::RunForever($config)
 }
 catch {
   $message = Get-RootMessage $_
   # No window and no console when the scheduled task runs this: leave the reason where it can be found.
   if (-not ($Simulate -or $CheckConfig -or $TestNotify -or $TestDump)) {
     try {
-      $errorLog = Join-Path ([HangDumpWatchdog.WatchdogConfig]::DefaultDataDir()) 'startup-error.log'
+      $errorLog = Join-Path ([FreezeDump.WatchdogConfig]::DefaultDataDir()) 'startup-error.log'
       New-Item -ItemType Directory -Force -Path (Split-Path $errorLog) | Out-Null
       Add-Content -LiteralPath $errorLog -Value "$(Get-Date -Format 's') $message"
     }

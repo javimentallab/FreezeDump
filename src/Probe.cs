@@ -7,7 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public interface IProbe
     {

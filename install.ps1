@@ -15,8 +15,8 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-  [string]$InstallDir = (Join-Path $env:ProgramFiles 'HangDumpWatchdog'),
-  [string]$DataDir = (Join-Path $env:ProgramData 'HangDumpWatchdog'),
+  [string]$InstallDir = (Join-Path $env:ProgramFiles 'FreezeDump'),
+  [string]$DataDir = (Join-Path $env:ProgramData 'FreezeDump'),
   [string]$User = "$env:USERDOMAIN\$env:USERNAME",
   [switch]$ReplaceConfig,
   [switch]$NoStart
@@ -44,7 +44,7 @@ $configToUse = if ($useInstalled) { $installedConfig } else { $sourceConfig }
 # Stops here, with nothing changed yet, if the config is wrong. An empty dataDir means "next to the file".
 try {
   $json = Get-Content -LiteralPath $configToUse -Raw
-  $config = [HangDumpWatchdog.WatchdogConfig]::Parse($json, $DataDir)
+  $config = [FreezeDump.WatchdogConfig]::Parse($json, $DataDir)
 }
 catch {
   $inner = $_.Exception

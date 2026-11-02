@@ -3,7 +3,7 @@ using System;
 using System.Net.Http;
 using System.Text;
 
-namespace HangDumpWatchdog
+namespace FreezeDump
 {
     public interface INotifier
     {
