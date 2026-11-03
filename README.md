@@ -11,8 +11,8 @@ processes, it asks for a **live kernel memory dump on its own**, with no blue sc
 is something to analyze after you have had to press the power button.
 
 > **Experimental. Read [Known limitations](#known-limitations) first.** It relies on an undocumented Windows
-> API, it has been tested on one Windows version only, and **neither of the two real hangs so far left a
-> complete dump**. The latest fix has only been tried on a healthy PC, never during a real hang.
+> API, it has been tested on one Windows version only, and **only one of the three real hangs so far left a
+> complete dump**, with the private prototype. This version has never run during a real hang.
 
 ## What it does
 
@@ -39,7 +39,7 @@ is something to analyze after you have had to press the power button.
 
 ## Known limitations
 
-### Two real hangs so far: no complete dump yet
+### Three real hangs so far: one complete dump
 
 **First hang.** On 31 October 2026 the PC it was built on hung for real. **Detection worked:** the probe stopped ending and
 the hang was declared at 45 s. **The dump did not:** it was requested and never finished. The log kept being
@@ -57,8 +57,14 @@ rescued file was 2.7 GB, but only the first 1.1 GB held data and
 the rest was zeros. WinDbg's usual commands (`!locks`, `!process`, `!stacks`) found nothing, because the page
 tables and process lists were in the missing part. What could be recovered by hand showed threads waiting on
 NTFS locks, among them two of the threads that write cached files to disk. That fits the dump having stayed in
-the file cache, so the dump files are now written through to disk. **That explanation is not proven either, and
-write-through has only been tried on a healthy PC.** It still needs the disk to accept writes. The log is written the same way and kept going during both hangs.
+the file cache, so the dump files are now written through to disk.
+
+**Third hang.** On 3 November 2026 it hung again, with the dump written through to disk. Detection worked again and
+the kernel call returned within 31 s. Closing the file blocked again: it had not finished 139 s later, when the log
+stops, and the PC ended up being reset with the power button. This time the dump was all there: the rescued file was
+2905 MB with data up to its last megabyte, cdb (WinDbg) gave no truncation warning, and `!locks` and `!thread` named
+the threads holding the locks. **That fits the explanation above, but it is one hang, on the prototype.** It still
+needs the disk to accept writes. The log is written the same way and kept going during all three hangs.
 
 | When | Trigger | Code | Result |
 |---|---|---|---|
@@ -69,7 +75,8 @@ write-through has only been tried on a healthy PC.** It still needs the disk to 
 | 2 Nov 2026 | `-TestDump`, healthy PC | This version, 0.1.0 | OK: 2495 MB in 2.1 s, valid header, code `0x161`. cdb (WinDbg) opened it |
 | 2 Nov 2026 | **Real hang**, files opened in advance | Private prototype | **Hang detected at 45 s. The call returned, closing the file blocked. Only 1.1 GB of 2.7 GB reached the disk** |
 | 2 Nov 2026 | Over TCP, healthy PC, written through to disk | Private prototype | OK: 2820 MB in 3.4 s, valid header, code `0x161`. cdb (WinDbg) listed 327 processes, with no truncation warning |
-| Not yet | Real hang, written through to disk | | **Never tested** |
+| 3 Nov 2026 | **Real hang**, written through to disk | Private prototype | **Hang detected at 45 s. Closing the file blocked again, but the dump was all on disk: 2905 MB. `!locks` named the lock holders** |
+| Not yet | Real hang | This version, 0.1.0 | **Never tested** |
 
 Version 0.1.0 is a cleaned-up rewrite of that prototype. The native call is the same. This code has only
 requested a dump on a healthy PC, and the real hangs above happened with the prototype. Run

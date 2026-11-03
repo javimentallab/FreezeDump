@@ -11,8 +11,8 @@ Un vigilante para los cuelgues de Windows que no dejan rastro. Si el sistema dej
 analizar después de tener que apagar con el botón.
 
 > **Experimental. Lee antes las [limitaciones conocidas](#limitaciones-conocidas).** Usa una API de Windows sin
-> documentar, solo se ha probado en una versión de Windows y **ninguno de los dos cuelgues reales hasta ahora dejó
-> un volcado completo**. El último arreglo solo se ha probado con el PC sano, nunca durante un cuelgue real.
+> documentar, solo se ha probado en una versión de Windows y **solo uno de los tres cuelgues reales hasta ahora dejó
+> un volcado completo**, con el prototipo privado. Esta versión nunca se ha ejecutado durante un cuelgue real.
 
 ## Qué hace
 
@@ -39,7 +39,7 @@ analizar después de tener que apagar con el botón.
 
 ## Limitaciones conocidas
 
-### Dos cuelgues reales hasta ahora: aún ningún volcado completo
+### Tres cuelgues reales hasta ahora: un volcado completo
 
 **Primer cuelgue.** El 31 de octubre de 2026 el PC donde se creó se colgó de verdad. **La detección funcionó:** la sonda dejó de
 terminar y el cuelgue se declaró a los 45 s. **El volcado no:** se pidió y nunca terminó. El log siguió
@@ -59,8 +59,15 @@ pero solo el primer 1,1 GB tenía datos y el resto eran ceros. Los comandos habi
 `!stacks`) no encontraron nada, porque las tablas de páginas y las listas de procesos estaban en la parte perdida. Lo
 que se pudo rescatar a mano mostró hilos esperando candados de NTFS, entre ellos dos de los que escriben a disco los
 ficheros en caché. Eso encaja con que el volcado se quedara en la caché de ficheros, así que ahora los ficheros de
-volcado se escriben directos a disco. **Esa explicación tampoco está demostrada, y la escritura directa solo se ha
-probado con el PC sano.** Sigue necesitando que el disco acepte escrituras. El log se escribe del mismo modo y siguió funcionando durante los dos cuelgues.
+volcado se escriben directos a disco.
+
+**Tercer cuelgue.** El 3 de noviembre de 2026 se volvió a colgar, con el volcado escrito directo a disco. La detección
+volvió a funcionar y la llamada al núcleo terminó en menos de 31 s. Cerrar el fichero se volvió a atascar: no había
+terminado 139 s más tarde, cuando se acaba el log, y el PC terminó reiniciándose con el botón. Esta vez el volcado
+estaba entero: el fichero rescatado ocupaba 2905 MB con datos hasta el último megabyte, cdb (WinDbg) no avisó de
+fichero cortado, y `!locks` y `!thread` señalaron los hilos que tenían los candados. **Eso encaja con la explicación
+anterior, pero es un solo cuelgue y con el prototipo.** Sigue necesitando que el disco acepte escrituras. El log se
+escribe del mismo modo y siguió funcionando durante los tres cuelgues.
 
 | Cuándo | Disparo | Código | Resultado |
 |---|---|---|---|
@@ -71,7 +78,8 @@ probado con el PC sano.** Sigue necesitando que el disco acepte escrituras. El l
 | 2 nov 2026 | `-TestDump`, PC sano | Esta versión, 0.1.0 | Bien: 2495 MB en 2,1 s, cabecera válida, código `0x161`. cdb (WinDbg) lo abrió |
 | 2 nov 2026 | **Cuelgue real**, ficheros abiertos por adelantado | Prototipo privado | **Cuelgue detectado a los 45 s. La llamada terminó, cerrar el fichero se atascó. Solo 1,1 GB de 2,7 GB llegó a disco** |
 | 2 nov 2026 | Por TCP, PC sano, con escritura directa a disco | Prototipo privado | Bien: 2820 MB en 3,4 s, cabecera válida, código `0x161`. cdb (WinDbg) listó 327 procesos, sin aviso de fichero cortado |
-| Aún no | Cuelgue real, con escritura directa a disco | | **Sin probar** |
+| 3 nov 2026 | **Cuelgue real**, con escritura directa a disco | Prototipo privado | **Cuelgue detectado a los 45 s. Cerrar el fichero se volvió a atascar, pero el volcado estaba entero en disco: 2905 MB. `!locks` señaló a los dueños de los candados** |
+| Aún no | Cuelgue real | Esta versión, 0.1.0 | **Sin probar** |
 
 La versión 0.1.0 es una reescritura limpia de ese prototipo. La llamada nativa es la misma. Este código solo ha
 pedido volcados con el PC sano, y los cuelgues reales de arriba fueron con el prototipo. Ejecuta

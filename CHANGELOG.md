@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Known limitations in the READMEs: a third real hang, on 3 November 2026, left a complete dump. That was the private
+  prototype, written through to disk. This version has still not run during a real hang.
+
 ## [0.1.0] - 2026-11-02
 
 First version.
